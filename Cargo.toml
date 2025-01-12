@@ -1,0 +1,18 @@
+[package]
+name = "toaster-nes"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+hex = "0.4.3"
+lazy_static = "1.5.0"
+rand = "0.8.5"
+regex = "1.11.1"
+strum = "0.26.3"
+strum_macros = "0.26.4"
+
+[profile.dev]
+overflow-checks = false
+
+[lints.rust]
+unused = "allow"
