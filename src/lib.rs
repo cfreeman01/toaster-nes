@@ -42,9 +42,7 @@ impl Nes {
     pub fn step(&mut self) {
         let (cpu, ppu) = (&mut self.cpu, &mut self.ppu);
 
-        let cycles = cpu.step(cpu_bus!(self));
-
-        for _ in 0..cycles * 3 {
+        for _ in 0..cpu.step(cpu_bus!(self)) * 3 {
             ppu.step(ppu_bus!(self));
         }
     }

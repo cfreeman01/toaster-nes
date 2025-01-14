@@ -58,3 +58,34 @@ fn init(prg_src: &str, prg_addr: u16) -> (Cpu, TestCpuBus) {
 
     (cpu, bus)
 }
+
+#[test]
+fn reset() {
+    let (cpu, _bus) = init("", 0xBEEF);
+
+    assert_eq!(cpu.cycles, NUM_CYCLES_INT);
+    assert_eq!(cpu.pc, 0xBEEF);
+    assert_eq!(cpu.s, 0xFD);
+    assert_eq!(cpu.i, true);
+}
+
+#[test]
+fn adc_imm() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$FF
+        ADC #$01
+        ADC #$01",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.v, false);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.c, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 2);
+}
