@@ -59,6 +59,10 @@ fn init(prg_src: &str, prg_addr: u16) -> (Cpu, TestCpuBus) {
     (cpu, bus)
 }
 
+fn cycles_since_reset(cpu: &Cpu) -> u32 {
+    cpu.cycles - (NUM_CYCLES_INT as u32)
+}
+
 #[test]
 fn reset() {
     let (cpu, _bus) = init("", 0xBEEF);
@@ -88,4 +92,186 @@ fn adc_imm() {
     assert_eq!(cpu.c, true);
     cpu.step(&mut bus);
     assert_eq!(cpu.a, 2);
+}
+
+#[test]
+fn adc_zp() {
+    let (mut cpu, mut bus) = init("ADC $00", PRG_ADDR);
+
+    bus.cpu_write(0x0000, 0xFF);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn adc_zpx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$01
+         ADC $00,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0001, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn adc_zpx_wrap() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$FF
+         ADC $01,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0000, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn adc_abs() {
+    let (mut cpu, mut bus) = init("ADC $06FF", PRG_ADDR);
+
+    bus.cpu_write(0x06FF, 0xFF);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn adc_absx_no_cross() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$01
+        ADC $00FE,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x00FF, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 6);
+}
+
+#[test]
+fn adc_absx_cross() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$01
+        ADC $00FF,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0100, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 7);
+}
+
+#[test]
+fn adc_absy() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$01
+        ADC $00FE,Y",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x00FF, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 6);
+}
+
+#[test]
+fn adc_indx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$01
+        ADC ($04,X)",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0005, 0xFF);
+    bus.cpu_write(0x0006, 0x06);
+    bus.cpu_write(0x06FF, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 8);
+}
+
+#[test]
+fn adc_indy_nocross() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$01
+        ADC ($05),Y",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0005, 0xFE);
+    bus.cpu_write(0x0006, 0x06);
+    bus.cpu_write(0x06FF, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 7);
+}
+
+#[test]
+fn adc_indy_cross() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$01
+        ADC ($05),Y",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0005, 0xFF);
+    bus.cpu_write(0x0006, 0x06);
+    bus.cpu_write(0x0700, 0xFF);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cycles_since_reset(&cpu), 8);
+}
+
+#[test]
+fn lda() {
+    let (mut cpu, mut bus) = init("LDA #$FF", PRG_ADDR);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn ldx_imm() {
+    let (mut cpu, mut bus) = init("LDX #$BE", PRG_ADDR);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.x, 0xBE);
+}
+
+#[test]
+fn ldy_imm() {
+    let (mut cpu, mut bus) = init("LDY #$EF", PRG_ADDR);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.y, 0xEF);
 }
