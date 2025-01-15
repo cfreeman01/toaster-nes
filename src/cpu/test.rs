@@ -253,6 +253,19 @@ fn adc_indy_cross() {
 }
 
 #[test]
+fn and() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$FF
+        AND #$0F",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0x0F);
+}
+
+#[test]
 fn lda() {
     let (mut cpu, mut bus) = init("LDA #$FF", PRG_ADDR);
 

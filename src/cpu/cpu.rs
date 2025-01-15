@@ -78,14 +78,14 @@ impl Cpu {
             0x79 => self.absi_r(bus, Cpu::adc, self.y),
             0x61 => self.indx_r(bus, Cpu::adc),
             0x71 => self.indy_r(bus, Cpu::adc),
-            // (0x29, Imm(Cpu::and)),
-            // (0x25, ZpR(Cpu::and)),
-            // (0x35, ZpxR(Cpu::and)),
-            // (0x2D, AbsR(Cpu::and)),
-            // (0x3D, AbsxR(Cpu::and)),
-            // (0x39, AbsyR(Cpu::and)),
-            // (0x21, IndxR(Cpu::and)),
-            // (0x31, IndyR(Cpu::and)),
+            0x29 => self.imm(bus, Cpu::and),
+            0x25 => self.zp_r(bus, Cpu::and),
+            0x35 => self.zpi_r(bus, Cpu::and, self.x),
+            0x2D => self.abs_r(bus, Cpu::and),
+            0x3D => self.absi_r(bus, Cpu::and, self.x),
+            0x39 => self.absi_r(bus, Cpu::and, self.y),
+            0x21 => self.indx_r(bus, Cpu::and),
+            0x31 => self.indy_r(bus, Cpu::and),
             // (0x0A, Acc(Cpu::asl)),
             // (0x06, ZpRW(Cpu::asl)),
             // (0x16, ZpxRW(Cpu::asl)),
@@ -145,22 +145,22 @@ impl Cpu {
             // (0x20, Jsr),
             0xA9 => self.imm(bus, Cpu::lda),
             0xA5 => self.zp_r(bus, Cpu::lda),
-            // (0xB5, ZpxR(Cpu::lda)),
-            // (0xAD, AbsR(Cpu::lda)),
-            // (0xBD, AbsxR(Cpu::lda)),
-            // (0xB9, AbsyR(Cpu::lda)),
-            // (0xA1, IndxR(Cpu::lda)),
-            // (0xB1, IndyR(Cpu::lda)),
+            0xB5 => self.zpi_r(bus, Cpu::lda, self.x),
+            0xAD => self.abs_r(bus, Cpu::lda),
+            0xBD => self.absi_r(bus, Cpu::lda, self.x),
+            0xB9 => self.absi_r(bus, Cpu::lda, self.y),
+            0xA1 => self.indx_r(bus, Cpu::lda),
+            0xB1 => self.indy_r(bus, Cpu::lda),
             0xA2 => self.imm(bus, Cpu::ldx),
             0xA6 => self.zp_r(bus, Cpu::ldx),
             0xB6 => self.zpi_r(bus, Cpu::ldx, self.y),
-            // (0xAE, AbsR(Cpu::ldx)),
-            // (0xBE, AbsyR(Cpu::ldx)),
+            0xAE => self.abs_r(bus, Cpu::ldx),
+            0xBE => self.absi_r(bus, Cpu::ldx, self.y),
             0xA0 => self.imm(bus, Cpu::ldy),
             0xA4 => self.zp_r(bus, Cpu::ldy),
             0xB4 => self.zpi_r(bus, Cpu::ldy, self.x),
-            // (0xAC, AbsR(Cpu::ldy)),
-            // (0xBC, AbsxR(Cpu::ldy)),
+            0xAC => self.abs_r(bus, Cpu::ldy),
+            0xBC => self.absi_r(bus, Cpu::ldy, self.x),
             // (0x4A, Acc(Cpu::lsr)),
             // (0x46, ZpRW(Cpu::lsr)),
             // (0x56, ZpxRW(Cpu::lsr)),
@@ -257,7 +257,7 @@ impl Cpu {
 
     fn imp(&mut self, bus: &mut impl CpuBus, ins: InsImp) -> u32 {
         ins(self);
-        
+
         NUM_CYCLES_IMP
     }
 
@@ -306,7 +306,7 @@ impl Cpu {
         }
     }
 
-    fn indx_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32{
+    fn indx_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32 {
         let addr = bus.cpu_read(self.pc());
         let addr_low = bus.cpu_read((addr + self.x) as u16);
         let addr_high = bus.cpu_read((addr + self.x + 1) as u16);
@@ -316,7 +316,7 @@ impl Cpu {
         NUM_CYCLES_INDXR
     }
 
-    fn indy_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32{
+    fn indy_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32 {
         let addr = bus.cpu_read(self.pc());
         let addr_low = bus.cpu_read(addr as u16);
         let addr_high = bus.cpu_read((addr + 1) as u16);
@@ -389,6 +389,123 @@ impl Cpu {
         self.set_zn(self.a);
     }
 
+    fn and(&mut self, val: u8) {
+        self.a = self.a & val;
+        self.set_zn(self.a);
+    }
+
+    fn asl(&mut self, val: u8) -> u8 {
+        self.c = (val & 0x80) != 0;
+        self.set_zn(val << 1);
+        val << 1
+    }
+
+    fn bcc(&self) -> bool {
+        !self.c
+    }
+
+    fn bcs(&self) -> bool {
+        self.c
+    }
+
+    fn beq(&self) -> bool {
+        self.z
+    }
+
+    fn bit(&mut self, val: u8) {
+        self.n = (val & 0x80) != 0;
+        self.v = (val & 0x40) != 0;
+        self.z = (self.a & val) == 0;
+    }
+
+    fn bmi(&self) -> bool {
+        self.n
+    }
+
+    fn bne(&self) -> bool {
+        !self.z
+    }
+
+    fn bpl(&self) -> bool {
+        !self.n
+    }
+
+    fn bvc(&self) -> bool {
+        !self.v
+    }
+
+    fn bvs(&self) -> bool {
+        self.v
+    }
+
+    fn clc(&mut self) {
+        self.c = false;
+    }
+
+    fn cld(&mut self) {
+        self.d = false;
+    }
+
+    fn cli(&mut self) {
+        self.i = false;
+    }
+
+    fn clv(&mut self) {
+        self.v = false;
+    }
+
+    fn cmp(&mut self, val: u8) {
+        self.c = self.a >= val;
+        self.set_zn(self.a - val);
+    }
+
+    fn cpx(&mut self, val: u8) {
+        self.c = self.x >= val;
+        self.set_zn(self.x - val);
+    }
+
+    fn cpy(&mut self, val: u8) {
+        self.c = self.y >= val;
+        self.set_zn(self.y - val);
+    }
+
+    fn dec(&mut self, val: u8) -> u8 {
+        let val = val - 1;
+        self.set_zn(val);
+        val
+    }
+
+    fn dex(&mut self) {
+        self.x -= 1;
+        self.set_zn(self.x);
+    }
+
+    fn dey(&mut self) {
+        self.y -= 1;
+        self.set_zn(self.y);
+    }
+
+    fn eor(&mut self, val: u8) {
+        self.a = self.a ^ val;
+        self.set_zn(self.a);
+    }
+
+    fn inc(&mut self, val: u8) -> u8 {
+        let val = val + 1;
+        self.set_zn(val);
+        val
+    }
+
+    fn inx(&mut self) {
+        self.x += 1;
+        self.set_zn(self.x);
+    }
+
+    fn iny(&mut self) {
+        self.y += 1;
+        self.set_zn(self.y);
+    }
+
     fn lda(&mut self, val: u8) {
         self.a = val;
         self.set_zn(self.a);
@@ -402,6 +519,115 @@ impl Cpu {
     fn ldy(&mut self, val: u8) {
         self.y = val;
         self.set_zn(self.x);
+    }
+
+    fn lsr(&mut self, val: u8) -> u8 {
+        self.c = (val & 0x01) != 0;
+        let val = val >> 1;
+        self.set_zn(val);
+        val
+    }
+
+    fn nop(&mut self) {}
+
+    fn ora(&mut self, val: u8) {
+        self.a = self.a | val;
+        self.set_zn(self.a);
+    }
+
+    fn pha(&self) -> u8 {
+        self.a
+    }
+
+    fn php(&self) -> u8 {
+        self.get_flags() | (1 << 4)
+    }
+
+    fn pla(&mut self, val: u8) {
+        self.a = val;
+    }
+
+    fn plp(&mut self, val: u8) {
+        self.set_flags(val);
+    }
+
+    fn rol(&mut self, val: u8) -> u8 {
+        let old_c = self.c;
+        self.c = (val & 0x80) != 0;
+        let mut val = val << 1;
+        if old_c {
+            val |= 0x01;
+        }
+        self.set_zn(val);
+        val
+    }
+
+    fn ror(&mut self, val: u8) -> u8 {
+        let old_c = self.c;
+        self.c = (val & 0x01) != 0;
+        let mut val = val >> 1;
+        if old_c {
+            val |= 0x80;
+        }
+        self.set_zn(val);
+        val
+    }
+
+    fn sbc(&mut self, val: u8) {
+        self.adc(!val);
+    }
+
+    fn sec(&mut self) {
+        self.c = true;
+    }
+
+    fn sed(&mut self) {
+        self.d = true;
+    }
+
+    fn sei(&mut self) {
+        self.i = true;
+    }
+
+    fn sta(&self) -> u8 {
+        self.a
+    }
+
+    fn stx(&self) -> u8 {
+        self.x
+    }
+
+    fn sty(&self) -> u8 {
+        self.y
+    }
+
+    fn tax(&mut self) {
+        self.x = self.a;
+        self.set_zn(self.x);
+    }
+
+    fn tay(&mut self) {
+        self.y = self.a;
+        self.set_zn(self.y);
+    }
+
+    fn tsx(&mut self) {
+        self.x = self.s;
+        self.set_zn(self.x);
+    }
+
+    fn txa(&mut self) {
+        self.a = self.x;
+        self.set_zn(self.a);
+    }
+
+    fn txs(&mut self) {
+        self.s = self.x;
+    }
+
+    fn tya(&mut self) {
+        self.a = self.y;
+        self.set_zn(self.a);
     }
 }
 
