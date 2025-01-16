@@ -266,6 +266,276 @@ fn and() {
 }
 
 #[test]
+fn asl_acc() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$FF
+        ASL A",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFE);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, true);
+}
+
+#[test]
+fn asl_zp() {
+    let (mut cpu, mut bus) = init(
+        "ASL $AA
+        ASL $AA
+        ASL $AA",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x00AA, 0xC0);
+
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x00AA), 0x80);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, true);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x00AA), 0x00);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.z, true);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x00AA), 0x00);
+    assert_eq!(cpu.c, false);
+    assert_eq!(cpu.z, true);
+}
+
+#[test]
+fn asl_zpx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$0A
+        ASL $A0,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x00AA, 0xC0);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x00AA), 0x80);
+}
+
+#[test]
+fn asl_abs() {
+    let (mut cpu, mut bus) = init("ASL $1111", PRG_ADDR);
+
+    bus.cpu_write(0x1111, 0xC0);
+
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x1111), 0x80);
+}
+
+#[test]
+fn asl_absx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$01
+        ASL $06FE,X",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x06FF, 0xC0);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x06FF), 0x80);
+}
+
+#[test]
+fn bit() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$01
+        BIT $11",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x0011, 0xC0);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.v, true);
+}
+
+#[test]
+fn clc() {
+    let (mut cpu, mut bus) = init("CLC", PRG_ADDR);
+
+    cpu.c = true;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.c, false);
+}
+
+#[test]
+fn cld() {
+    let (mut cpu, mut bus) = init("CLD", PRG_ADDR);
+
+    cpu.d = true;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, false);
+}
+
+#[test]
+fn cli() {
+    let (mut cpu, mut bus) = init("CLI", PRG_ADDR);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.i, false);
+}
+
+#[test]
+fn clv() {
+    let (mut cpu, mut bus) = init("CLV", PRG_ADDR);
+
+    cpu.v = true;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.v, false);
+}
+
+#[test]
+fn cmp() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$FF
+        CMP #$FF",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, false);
+}
+
+#[test]
+fn cpx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$FF
+        CPX #$FF",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, false);
+}
+
+#[test]
+fn cpy() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$FF
+        CPY #$FF",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, false);
+}
+
+#[test]
+fn dec() {
+    let (mut cpu, mut bus) = init("DEC $1111", PRG_ADDR);
+
+    bus.cpu_write(0x1111, 0x08);
+
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x1111), 0x07);
+}
+
+#[test]
+fn dex() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$FF
+        DEX",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.x, 0xFE);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.z, false);
+}
+
+#[test]
+fn dey() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$0F
+        DEY",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.y, 0x0E);
+    assert_eq!(cpu.n, false);
+    assert_eq!(cpu.z, false);
+}
+
+#[test]
+fn eor() {
+    let (mut cpu, mut bus) = init(
+        "ADC #$FF
+        EOR #$0F",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xF0);
+}
+
+#[test]
+fn inc() {
+    let (mut cpu, mut bus) = init("INC $11", PRG_ADDR);
+
+    bus.cpu_write(0x0011, 0x08);
+
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x0011), 0x09);
+}
+
+#[test]
+fn inx() {
+    let (mut cpu, mut bus) = init(
+        "LDX #$FF
+        INX",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.x, 0x00);
+    assert_eq!(cpu.z, true);
+    assert_eq!(cpu.n, false);
+}
+
+#[test]
+fn iny() {
+    let (mut cpu, mut bus) = init(
+        "LDY #$00
+        INY",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.y, 0x01);
+    assert_eq!(cpu.z, false);
+    assert_eq!(cpu.n, false);
+}
+
+#[test]
 fn lda() {
     let (mut cpu, mut bus) = init("LDA #$FF", PRG_ADDR);
 
@@ -287,4 +557,205 @@ fn ldy_imm() {
 
     cpu.step(&mut bus);
     assert_eq!(cpu.y, 0xEF);
+}
+
+#[test]
+fn lsr() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LSR A",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0x7F);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.n, false);
+    assert_eq!(cpu.z, false);
+}
+
+#[test]
+fn ora() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$0F
+        ORA $EE",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write(0x00EE, 0xF0);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.z, false);
+}
+
+#[test]
+fn rol() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        ROL A
+        ROL A",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFE);
+    assert_eq!(cpu.c, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFD);
+    assert_eq!(cpu.c, true);
+}
+
+#[test]
+fn ror() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        ROR A
+        ROR A",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0x7F);
+    assert_eq!(cpu.c, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xBF);
+    assert_eq!(cpu.c, true);
+}
+
+#[test]
+fn sbc() {
+    let (mut cpu, mut bus) = init(
+        "SBC #$01
+        SBC #$01",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFE);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.v, false);
+    assert_eq!(cpu.c, false);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFC);
+    assert_eq!(cpu.n, true);
+    assert_eq!(cpu.v, false);
+    assert_eq!(cpu.c, true);
+}
+
+#[test]
+fn sta_zp() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        STA $AA",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x00AA), 0xFF);
+}
+
+#[test]
+fn sta_zpx() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LDX #$0A
+        STA $A0,X",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x00AA), 0xFF);
+}
+
+#[test]
+fn sta_abs() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        STA $1122",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x1122), 0xFF);
+}
+
+#[test]
+fn sta_absx() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LDX #$01
+        STA $00FF,X",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x0100), 0xFF);
+}
+
+#[test]
+fn sta_absy() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LDY #$01
+        STA $1000,Y",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x1001), 0xFF);
+}
+
+#[test]
+fn sta_indx() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LDX #$01
+        STA ($10,X)",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write_16(0x0011, 0x1122);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x1122), 0xFF);
+}
+
+#[test]
+fn sta_indy() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        LDY #$01
+        STA ($10),Y",
+        PRG_ADDR,
+    );
+
+    bus.cpu_write_16(0x0010, 0x2221);
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(bus.cpu_read(0x2222), 0xFF);
 }

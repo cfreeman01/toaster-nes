@@ -42,9 +42,20 @@ const NUM_CYCLES_ABSR: u32 = 4;
 const NUM_CYCLES_ABSIR: u32 = 4;
 const NUM_CYCLES_INDXR: u32 = 6;
 const NUM_CYCLES_INDYR: u32 = 5;
+const NUM_CYCLES_ACC: u32 = 2;
+const NUM_CYCLES_ZPRW: u32 = 5;
+const NUM_CYCLES_ZPXRW: u32 = 6;
+const NUM_CYCLES_ABSRW: u32 = 6;
+const NUM_CYCLES_ABSXRW: u32 = 7;
+const NUM_CYCLES_ZPW: u32 = 4;
+const NUM_CYCLES_ZPIW: u32 = 4;
+const NUM_CYCLES_ABSW: u32 = 4;
+const NUM_CYCLES_ABSIW: u32 = 5;
+const NUM_CYCLES_INDXW: u32 = 6;
+const NUM_CYCLES_INDYW: u32 = 6;
 
 type InsR = fn(&mut Cpu, val: u8);
-type InsW = fn(&mut Cpu) -> u8;
+type InsW = fn(&Cpu) -> u8;
 type InsRW = fn(&mut Cpu, val: u8) -> u8;
 type InsBr = fn(&mut Cpu) -> bool;
 type InsImp = fn(&mut Cpu);
@@ -86,11 +97,11 @@ impl Cpu {
             0x39 => self.absi_r(bus, Cpu::and, self.y),
             0x21 => self.indx_r(bus, Cpu::and),
             0x31 => self.indy_r(bus, Cpu::and),
-            // (0x0A, Acc(Cpu::asl)),
-            // (0x06, ZpRW(Cpu::asl)),
-            // (0x16, ZpxRW(Cpu::asl)),
-            // (0x0E, AbsRW(Cpu::asl)),
-            // (0x1E, AbsxRW(Cpu::asl)),
+            0x0A => self.acc(bus, Cpu::asl),
+            0x06 => self.zp_rw(bus, Cpu::asl),
+            0x16 => self.zpx_rw(bus, Cpu::asl),
+            0x0E => self.abs_rw(bus, Cpu::asl),
+            0x1E => self.absx_rw(bus, Cpu::asl),
             // (0x90, Br(Cpu::bcc)),
             // (0xB0, Br(Cpu::bcs)),
             // (0xD0, Br(Cpu::bne)),
@@ -99,47 +110,47 @@ impl Cpu {
             // (0x30, Br(Cpu::bmi)),
             // (0x50, Br(Cpu::bvc)),
             // (0x70, Br(Cpu::bvs)),
-            // (0x24, ZpR(Cpu::bit)),
-            // (0x2C, AbsR(Cpu::bit)),
+            0x24 => self.zp_r(bus, Cpu::bit),
+            0x2C => self.abs_r(bus, Cpu::bit),
             // (0x00, Brk),
-            // (0x18, Imp(Cpu::clc)),
-            // (0xD8, Imp(Cpu::cld)),
-            // (0x58, Imp(Cpu::cli)),
-            // (0xB8, Imp(Cpu::clv)),
-            // (0xC9, Imm(Cpu::cmp)),
-            // (0xC5, ZpR(Cpu::cmp)),
-            // (0xD5, ZpxR(Cpu::cmp)),
-            // (0xCD, AbsR(Cpu::cmp)),
-            // (0xDD, AbsxR(Cpu::cmp)),
-            // (0xD9, AbsyR(Cpu::cmp)),
-            // (0xC1, IndxR(Cpu::cmp)),
-            // (0xD1, IndyR(Cpu::cmp)),
-            // (0xE0, Imm(Cpu::cpx)),
-            // (0xE4, ZpR(Cpu::cpx)),
-            // (0xEC, AbsR(Cpu::cpx)),
-            // (0xC0, Imm(Cpu::cpy)),
-            // (0xC4, ZpR(Cpu::cpy)),
-            // (0xCC, AbsR(Cpu::cpy)),
-            // (0xC6, ZpRW(Cpu::dec)),
-            // (0xD6, ZpxRW(Cpu::dec)),
-            // (0xCE, AbsRW(Cpu::dec)),
-            // (0xDE, AbsxRW(Cpu::dec)),
-            // (0xCA, Imp(Cpu::dex)),
-            // (0x88, Imp(Cpu::dey)),
-            // (0x49, Imm(Cpu::eor)),
-            // (0x45, ZpR(Cpu::eor)),
-            // (0x55, ZpxR(Cpu::eor)),
-            // (0x4D, AbsR(Cpu::eor)),
-            // (0x5D, AbsxR(Cpu::eor)),
-            // (0x59, AbsyR(Cpu::eor)),
-            // (0x41, IndxR(Cpu::eor)),
-            // (0x51, IndyR(Cpu::eor)),
-            // (0xE6, ZpRW(Cpu::inc)),
-            // (0xF6, ZpxRW(Cpu::inc)),
-            // (0xEE, AbsRW(Cpu::inc)),
-            // (0xFE, AbsxRW(Cpu::inc)),
-            // (0xE8, Imp(Cpu::inx)),
-            // (0xC8, Imp(Cpu::iny)),
+            0x18 => self.imp(bus, Cpu::clc),
+            0xD8 => self.imp(bus, Cpu::cld),
+            0x58 => self.imp(bus, Cpu::cli),
+            0xB8 => self.imp(bus, Cpu::clv),
+            0xC9 => self.imm(bus, Cpu::cmp),
+            0xC5 => self.zp_r(bus, Cpu::cmp),
+            0xD5 => self.zpi_r(bus, Cpu::cmp, self.x),
+            0xCD => self.abs_r(bus, Cpu::cmp),
+            0xDD => self.absi_r(bus, Cpu::cmp, self.x),
+            0xD9 => self.absi_r(bus, Cpu::cmp, self.y),
+            0xC1 => self.indx_r(bus, Cpu::cmp),
+            0xD1 => self.indy_r(bus, Cpu::cmp),
+            0xE0 => self.imm(bus, Cpu::cpx),
+            0xE4 => self.zp_r(bus, Cpu::cpx),
+            0xEC => self.abs_r(bus, Cpu::cpx),
+            0xC0 => self.imm(bus, Cpu::cpy),
+            0xC4 => self.zp_r(bus, Cpu::cpy),
+            0xCC => self.abs_r(bus, Cpu::cpy),
+            0xC6 => self.zp_rw(bus, Cpu::dec),
+            0xD6 => self.zpx_rw(bus, Cpu::dec),
+            0xCE => self.abs_rw(bus, Cpu::dec),
+            0xDE => self.absx_rw(bus, Cpu::dec),
+            0xCA => self.imp(bus, Cpu::dex),
+            0x88 => self.imp(bus, Cpu::dey),
+            0x49 => self.imm(bus, Cpu::eor),
+            0x45 => self.zp_r(bus, Cpu::eor),
+            0x55 => self.zpi_r(bus, Cpu::eor, self.x),
+            0x4D => self.abs_r(bus, Cpu::eor),
+            0x5D => self.absi_r(bus, Cpu::eor, self.x),
+            0x59 => self.absi_r(bus, Cpu::eor, self.y),
+            0x41 => self.indx_r(bus, Cpu::eor),
+            0x51 => self.indy_r(bus, Cpu::eor),
+            0xE6 => self.zp_rw(bus, Cpu::inc),
+            0xF6 => self.zpx_rw(bus, Cpu::inc),
+            0xEE => self.abs_rw(bus, Cpu::inc),
+            0xFE => self.absx_rw(bus, Cpu::inc),
+            0xE8 => self.imp(bus, Cpu::inx),
+            0xC8 => self.imp(bus, Cpu::iny),
             // (0x4C, JmpAbs),
             // (0x6C, JmpInd),
             // (0x20, Jsr),
@@ -161,66 +172,66 @@ impl Cpu {
             0xB4 => self.zpi_r(bus, Cpu::ldy, self.x),
             0xAC => self.abs_r(bus, Cpu::ldy),
             0xBC => self.absi_r(bus, Cpu::ldy, self.x),
-            // (0x4A, Acc(Cpu::lsr)),
-            // (0x46, ZpRW(Cpu::lsr)),
-            // (0x56, ZpxRW(Cpu::lsr)),
-            // (0x4E, AbsRW(Cpu::lsr)),
-            // (0x5E, AbsxRW(Cpu::lsr)),
-            // (0xEA, Imp(Cpu::nop)),
-            // (0x09, Imm(Cpu::ora)),
-            // (0x05, ZpR(Cpu::ora)),
-            // (0x15, ZpxR(Cpu::ora)),
-            // (0x0D, AbsR(Cpu::ora)),
-            // (0x1D, AbsxR(Cpu::ora)),
-            // (0x19, AbsyR(Cpu::ora)),
-            // (0x01, IndxR(Cpu::ora)),
-            // (0x11, IndyR(Cpu::ora)),
-            // (0x48, Push(Cpu::pha)),
-            // (0x08, Push(Cpu::php)),
-            // (0x68, Pull(Cpu::pla)),
-            // (0x28, Pull(Cpu::plp)),
-            // (0x2A, Acc(Cpu::rol)),
-            // (0x26, ZpRW(Cpu::rol)),
-            // (0x36, ZpxRW(Cpu::rol)),
-            // (0x2E, AbsRW(Cpu::rol)),
-            // (0x3E, AbsxRW(Cpu::rol)),
-            // (0x6A, Acc(Cpu::ror)),
-            // (0x66, ZpRW(Cpu::ror)),
-            // (0x76, ZpxRW(Cpu::ror)),
-            // (0x6E, AbsRW(Cpu::ror)),
-            // (0x7E, AbsxRW(Cpu::ror)),
+            0x4A => self.acc(bus, Cpu::lsr),
+            0x46 => self.zp_rw(bus, Cpu::lsr),
+            0x56 => self.zpx_rw(bus, Cpu::lsr),
+            0x4E => self.abs_rw(bus, Cpu::lsr),
+            0x5E => self.absx_rw(bus, Cpu::lsr),
+            0xEA => self.imp(bus, Cpu::nop),
+            0x09 => self.imm(bus, Cpu::ora),
+            0x05 => self.zp_r(bus, Cpu::ora),
+            0x15 => self.zpi_r(bus, Cpu::ora, self.x),
+            0x0D => self.abs_r(bus, Cpu::ora),
+            0x1D => self.absi_r(bus, Cpu::ora, self.x),
+            0x19 => self.absi_r(bus, Cpu::ora, self.y),
+            0x01 => self.indx_r(bus, Cpu::ora),
+            0x11 => self.indy_r(bus, Cpu::ora),
+            // (0x48, Push(Cpu::pha),
+            // (0x08, Push(Cpu::php),
+            // (0x68, Pull(Cpu::pla),
+            // (0x28, Pull(Cpu::plp),
+            0x2A => self.acc(bus, Cpu::rol),
+            0x26 => self.zp_rw(bus, Cpu::rol),
+            0x36 => self.zpx_rw(bus, Cpu::rol),
+            0x2E => self.abs_rw(bus, Cpu::rol),
+            0x3E => self.absx_rw(bus, Cpu::rol),
+            0x6A => self.acc(bus, Cpu::ror),
+            0x66 => self.zp_rw(bus, Cpu::ror),
+            0x76 => self.zpx_rw(bus, Cpu::ror),
+            0x6E => self.abs_rw(bus, Cpu::ror),
+            0x7E => self.absx_rw(bus, Cpu::ror),
             // (0x40, Rti),
             // (0x60, Rts),
-            // (0xE9, Imm(Cpu::sbc)),
-            // (0xE5, ZpR(Cpu::sbc)),
-            // (0xF5, ZpxR(Cpu::sbc)),
-            // (0xED, AbsR(Cpu::sbc)),
-            // (0xFD, AbsxR(Cpu::sbc)),
-            // (0xF9, AbsyR(Cpu::sbc)),
-            // (0xE1, IndxR(Cpu::sbc)),
-            // (0xF1, IndyR(Cpu::sbc)),
-            // (0x38, Imp(Cpu::sec)),
-            // (0xF8, Imp(Cpu::sed)),
-            // (0x78, Imp(Cpu::sei)),
-            // (0x85, ZpW(Cpu::sta)),
-            // (0x95, ZpxW(Cpu::sta)),
-            // (0x8D, AbsW(Cpu::sta)),
-            // (0x9D, AbsxW(Cpu::sta)),
-            // (0x99, AbsyW(Cpu::sta)),
-            // (0x81, IndxW(Cpu::sta)),
-            // (0x91, IndyW(Cpu::sta)),
-            // (0x86, ZpW(Cpu::stx)),
-            // (0x96, ZpyW(Cpu::stx)),
-            // (0x8E, AbsW(Cpu::stx)),
-            // (0x84, ZpW(Cpu::sty)),
-            // (0x94, ZpxW(Cpu::sty)),
-            // (0x8C, AbsW(Cpu::sty)),
-            // (0xAA, Imp(Cpu::tax)),
-            // (0xA8, Imp(Cpu::tay)),
-            // (0xBA, Imp(Cpu::tsx)),
-            // (0x8A, Imp(Cpu::txa)),
-            // (0x9A, Imp(Cpu::txs)),
-            // (0x98, Imp(Cpu::tya))
+            0xE9 => self.imm(bus, Cpu::sbc),
+            0xE5 => self.zp_r(bus, Cpu::sbc),
+            0xF5 => self.zpi_r(bus, Cpu::sbc, self.x),
+            0xED => self.abs_r(bus, Cpu::sbc),
+            0xFD => self.absi_r(bus, Cpu::sbc, self.x),
+            0xF9 => self.absi_r(bus, Cpu::sbc, self.y),
+            0xE1 => self.indx_r(bus, Cpu::sbc),
+            0xF1 => self.indy_r(bus, Cpu::sbc),
+            0x38 => self.imp(bus, Cpu::sec),
+            0xF8 => self.imp(bus, Cpu::sed),
+            0x78 => self.imp(bus, Cpu::sei),
+            0x85 => self.zp_w(bus, Cpu::sta),
+            0x95 => self.zpi_w(bus, Cpu::sta, self.x),
+            0x8D => self.abs_w(bus, Cpu::sta),
+            0x9D => self.absi_w(bus, Cpu::sta, self.x),
+            0x99 => self.absi_w(bus, Cpu::sta, self.y),
+            0x81 => self.indx_w(bus, Cpu::sta),
+            0x91 => self.indy_w(bus, Cpu::sta),
+            0x86 => self.zp_w(bus, Cpu::stx),
+            0x96 => self.zpi_w(bus, Cpu::stx, self.y),
+            0x8E => self.abs_w(bus, Cpu::stx),
+            0x84 => self.zp_w(bus, Cpu::sty),
+            0x94 => self.zpi_w(bus, Cpu::sty, self.x),
+            0x8C => self.abs_w(bus, Cpu::sty),
+            0xAA => self.imp(bus, Cpu::tax),
+            0xA8 => self.imp(bus, Cpu::tay),
+            0xBA => self.imp(bus, Cpu::tsx),
+            0x8A => self.imp(bus, Cpu::txa),
+            0x9A => self.imp(bus, Cpu::txs),
+            0x98 => self.imp(bus, Cpu::tya),
             _ => panic!("Invalid opcode: {:02X}", opcode),
         }
     }
@@ -288,8 +299,8 @@ impl Cpu {
         let addr_low = bus.cpu_read(self.pc());
         let addr_high = bus.cpu_read(self.pc());
         let val = bus.cpu_read(u8_to_u16(addr_low, addr_high));
-
         ins(self, val);
+
         NUM_CYCLES_ABSR
     }
 
@@ -328,6 +339,96 @@ impl Cpu {
         } else {
             NUM_CYCLES_INDYR
         }
+    }
+
+    fn acc(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
+        self.a = ins(self, self.a);
+
+        NUM_CYCLES_ACC
+    }
+
+    fn zp_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
+        let addr = bus.cpu_read(self.pc());
+        let val = bus.cpu_read(addr as u16);
+        bus.cpu_write(addr as u16, ins(self, val));
+
+        NUM_CYCLES_ZPRW
+    }
+
+    fn zpx_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
+        let addr = (bus.cpu_read(self.pc()) + self.x) as u16;
+        let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, ins(self, val));
+
+        NUM_CYCLES_ZPXRW
+    }
+
+    fn abs_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let addr_high = bus.cpu_read(self.pc());
+        let addr = u8_to_u16(addr_low, addr_high);
+        let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, ins(self, val));
+
+        NUM_CYCLES_ABSRW
+    }
+
+    fn absx_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let addr_high = bus.cpu_read(self.pc());
+        let addr = u8_to_u16(addr_low, addr_high) + (self.x as u16);
+        let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, ins(self, val));
+
+        NUM_CYCLES_ABSXRW
+    }
+
+    fn zp_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+        let addr = bus.cpu_read(self.pc());
+        bus.cpu_write(addr as u16, ins(self));
+
+        NUM_CYCLES_ZPW
+    }
+
+    fn zpi_w(&mut self, bus: &mut impl CpuBus, ins: InsW, idx: u8) -> u32 {
+        let addr = bus.cpu_read(self.pc());
+        bus.cpu_write((addr + idx) as u16, ins(self));
+
+        NUM_CYCLES_ZPIW
+    }
+
+    fn abs_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let addr_high = bus.cpu_read(self.pc());
+        bus.cpu_write(u8_to_u16(addr_low, addr_high), ins(self));
+
+        NUM_CYCLES_ABSW
+    }
+
+    fn absi_w(&mut self, bus: &mut impl CpuBus, ins: InsW, idx: u8) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let addr_high = bus.cpu_read(self.pc());
+        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (idx as u16), ins(self));
+
+        NUM_CYCLES_ABSIW
+    }
+
+    fn indx_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+        let addr = bus.cpu_read(self.pc());
+        let addr_low = bus.cpu_read((addr + self.x) as u16);
+        let addr_high = bus.cpu_read((addr + self.x + 1) as u16);
+        bus.cpu_write(u8_to_u16(addr_low, addr_high), ins(self));
+
+        NUM_CYCLES_INDXW
+    }
+
+    fn indy_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+        let addr = bus.cpu_read(self.pc());
+        let addr_low = bus.cpu_read(addr as u16);
+        let addr_high = bus.cpu_read((addr + 1) as u16);
+        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (self.y as u16), ins(self));
+
+        NUM_CYCLES_INDYW
     }
 
     fn pc(&mut self) -> u16 {
