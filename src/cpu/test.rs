@@ -759,3 +759,263 @@ fn sta_indy() {
 
     assert_eq!(bus.cpu_read(0x2222), 0xFF);
 }
+
+#[test]
+fn bcc_not_taken() {
+    let (mut cpu, mut bus) = init(
+        "SEC
+        BCC $0F",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.pc, PRG_ADDR + 3);
+    assert_eq!(cycles_since_reset(&cpu), 4);
+}
+
+#[test]
+fn bcc_taken_nocross_forward() {
+    let (mut cpu, mut bus) = init("BCC $0F", PRG_ADDR);
+
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.pc, PRG_ADDR + 2 + 0x0F);
+    assert_eq!(cycles_since_reset(&cpu), 3);
+}
+
+#[test]
+fn bcc_taken_nocross_backward() {
+    let (mut cpu, mut bus) = init("BCC $FF", PRG_ADDR);
+
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.pc, PRG_ADDR + 1);
+    assert_eq!(cycles_since_reset(&cpu), 3);
+}
+
+#[test]
+fn bcc_taken_cross_forward() {
+    let (mut cpu, mut bus) = init("BCC $03", 0x80FC);
+
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.pc, 0x8101);
+    assert_eq!(cycles_since_reset(&cpu), 4);
+}
+
+#[test]
+fn bcc_taken_cross_backward() {
+    let (mut cpu, mut bus) = init("BCC $FD", 0x8000);
+
+    cpu.step(&mut bus);
+
+    assert_eq!(cpu.pc, 0x7FFF);
+    assert_eq!(cycles_since_reset(&cpu), 4);
+}
+
+#[test]
+fn jmp_abs() {
+    let (mut cpu, mut bus) = init("JMP $BEEF", PRG_ADDR);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.pc, 0xBEEF);
+    assert_eq!(cycles_since_reset(&cpu), 3);
+}
+
+#[test]
+fn jmp_ind_nowrap() {
+    let (mut cpu, mut bus) = init("JMP ($1111)", PRG_ADDR);
+
+    bus.cpu_write_16(0x1111, 0xBEEF);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.pc, 0xBEEF);
+    assert_eq!(cycles_since_reset(&cpu), 5);
+}
+
+#[test]
+fn jmp_ind_wrap() {
+    let (mut cpu, mut bus) = init("JMP ($10FF)", PRG_ADDR);
+
+    bus.cpu_write(0x10FF, 0xEF);
+    bus.cpu_write(0x1000, 0xBE);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.pc, 0xBEEF);
+    assert_eq!(cycles_since_reset(&cpu), 5);
+}
+
+#[test]
+fn jsr_rts() {
+    let (mut cpu, mut bus) = init("JSR $8888", 0x8000);
+
+    let sub_bin = assemble(
+        "LDA #$FF
+        SEC
+        RTS",
+    )
+    .unwrap_or_else(|msg| panic!("Error assembling program: {}", msg));
+
+    bus.cpu_write_vec(0x8888, sub_bin);
+
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x01FD), 0x80);
+    assert_eq!(bus.cpu_read(0x01FC), 0x02);
+    assert_eq!(cpu.pc, 0x8888);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.pc, 0x8003);
+}
+
+#[test]
+fn push_pull_a() {
+    let (mut cpu, mut bus) = init(
+        "LDA #$FF
+        PHA
+        LDA #$00
+        PLA",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x01FD), 0xFF);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}
+
+#[test]
+fn push_pull_flags() {
+    let (mut cpu, mut bus) = init(
+        "SED
+        SEC
+        PHP
+        CLD
+        CLC
+        PLP",
+        PRG_ADDR,
+    );
+
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.d, true);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x01FD), 0x3D);
+    cpu.step(&mut bus);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.c, false);
+    assert_eq!(cpu.d, false);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.c, true);
+    assert_eq!(cpu.d, true);
+    assert_eq!(cpu.get_flags(), 0x2D);
+}
+
+#[test]
+fn brk() {
+    let (mut cpu, mut bus) = init(
+        "SEC
+        BRK",
+        PRG_ADDR,
+    );
+
+    let isr_bin = assemble(
+        "SED
+        RTI",
+    )
+    .unwrap_or_else(|msg| panic!("Error assembling program: {}", msg));
+
+    bus.cpu_write_16(VEC_IRQ, 0x1111);
+    bus.cpu_write_vec(0x1111, isr_bin);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.c, true);
+    cpu.step(&mut bus);
+    assert_eq!(bus.cpu_read(0x01FD), 0x80);
+    assert_eq!(bus.cpu_read(0x01FC), 0x03);
+    assert_eq!(bus.cpu_read(0x01FB), 0x35);
+    assert_eq!(cpu.pc, 0x1111);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, false);
+    assert_eq!(cpu.pc, 0x8003);
+}
+
+#[test]
+fn irq() {
+    let (mut cpu, mut bus) = init(
+        "CLI
+        LDA #$AA",
+        PRG_ADDR,
+    );
+
+    let isr_bin = assemble(
+        "SED
+        RTI",
+    )
+    .unwrap_or_else(|msg| panic!("Error assembling program: {}", msg));
+
+    bus.cpu_write_16(VEC_IRQ, 0x1111);
+    bus.cpu_write_vec(0x1111, isr_bin);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.i, false);
+    cpu.irq = true;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.i, true);
+    assert_eq!(cpu.pc, 0x1111);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, false);
+    assert_eq!(cpu.i, false);
+    assert_eq!(cpu.pc, 0x8001);
+    cpu.irq = false;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xAA);
+}
+
+#[test]
+fn nmi() {
+    let (mut cpu, mut bus) = init(
+        "SEI
+        LDA #$AA
+        LDA #$FF",
+        PRG_ADDR,
+    );
+
+    let isr_bin = assemble(
+        "SED
+        RTI",
+    )
+    .unwrap_or_else(|msg| panic!("Error assembling program: {}", msg));
+
+    bus.cpu_write_16(VEC_NMI, 0x1111);
+    bus.cpu_write_vec(0x1111, isr_bin);
+
+    cpu.step(&mut bus);
+    assert_eq!(cpu.i, true);
+    cpu.nmi = true;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.i, true);
+    assert_eq!(cpu.pc, 0x1111);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, true);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.d, false);
+    assert_eq!(cpu.i, true);
+    assert_eq!(cpu.pc, 0x8001);
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xAA);
+    assert_eq!(cpu.nmi, true);
+    cpu.nmi = false;
+    cpu.step(&mut bus);
+    assert_eq!(cpu.a, 0xFF);
+}

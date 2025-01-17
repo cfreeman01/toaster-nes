@@ -1,8 +1,6 @@
 #[cfg(test)]
 mod test;
 
-use std::collections::HashMap;
-
 #[derive(Default)]
 pub struct Cpu {
     a: u8,
@@ -34,30 +32,36 @@ pub const VEC_IRQ: u16 = 0xFFFE;
 pub const STACK_BASE: u16 = 0x0100;
 
 const NUM_CYCLES_INT: u32 = 7;
+const NUM_CYCLES_RTI: u32 = 6;
 const NUM_CYCLES_IMM: u32 = 2;
 const NUM_CYCLES_IMP: u32 = 2;
-const NUM_CYCLES_ZPR: u32 = 3;
-const NUM_CYCLES_ZPIR: u32 = 4;
-const NUM_CYCLES_ABSR: u32 = 4;
-const NUM_CYCLES_ABSIR: u32 = 4;
-const NUM_CYCLES_INDXR: u32 = 6;
-const NUM_CYCLES_INDYR: u32 = 5;
+const NUM_CYCLES_ZP_R: u32 = 3;
+const NUM_CYCLES_ZPI_R: u32 = 4;
+const NUM_CYCLES_ABS_R: u32 = 4;
+const NUM_CYCLES_ABSI_R: u32 = 4;
+const NUM_CYCLES_INDX_R: u32 = 6;
+const NUM_CYCLES_INDY_R: u32 = 5;
 const NUM_CYCLES_ACC: u32 = 2;
-const NUM_CYCLES_ZPRW: u32 = 5;
-const NUM_CYCLES_ZPXRW: u32 = 6;
-const NUM_CYCLES_ABSRW: u32 = 6;
-const NUM_CYCLES_ABSXRW: u32 = 7;
-const NUM_CYCLES_ZPW: u32 = 4;
-const NUM_CYCLES_ZPIW: u32 = 4;
-const NUM_CYCLES_ABSW: u32 = 4;
-const NUM_CYCLES_ABSIW: u32 = 5;
-const NUM_CYCLES_INDXW: u32 = 6;
-const NUM_CYCLES_INDYW: u32 = 6;
+const NUM_CYCLES_ZP_RW: u32 = 5;
+const NUM_CYCLES_ZPX_RW: u32 = 6;
+const NUM_CYCLES_ABS_RW: u32 = 6;
+const NUM_CYCLES_ABSX_RW: u32 = 7;
+const NUM_CYCLES_ZP_W: u32 = 4;
+const NUM_CYCLES_ZPI_W: u32 = 4;
+const NUM_CYCLES_ABS_W: u32 = 4;
+const NUM_CYCLES_ABSI_W: u32 = 5;
+const NUM_CYCLES_INDX_W: u32 = 6;
+const NUM_CYCLES_INDY_W: u32 = 6;
+const NUM_CYCLES_BR: u32 = 2;
+const NUM_CYCLES_JMP_ABS: u32 = 3;
+const NUM_CYCLES_JMP_IND: u32 = 5;
+const NUM_CYCLES_JSR: u32 = 6;
+const NUM_CYCLES_RTS: u32 = 6;
+const NUM_CYCLES_PUSH: u32 = 3;
+const NUM_CYCLES_PULL: u32 = 4;
 
 type InsR = fn(&mut Cpu, val: u8);
-type InsW = fn(&Cpu) -> u8;
 type InsRW = fn(&mut Cpu, val: u8) -> u8;
-type InsBr = fn(&mut Cpu) -> bool;
 type InsImp = fn(&mut Cpu);
 
 impl Cpu {
@@ -102,17 +106,17 @@ impl Cpu {
             0x16 => self.zpx_rw(bus, Cpu::asl),
             0x0E => self.abs_rw(bus, Cpu::asl),
             0x1E => self.absx_rw(bus, Cpu::asl),
-            // (0x90, Br(Cpu::bcc)),
-            // (0xB0, Br(Cpu::bcs)),
-            // (0xD0, Br(Cpu::bne)),
-            // (0xF0, Br(Cpu::beq)),
-            // (0x10, Br(Cpu::bpl)),
-            // (0x30, Br(Cpu::bmi)),
-            // (0x50, Br(Cpu::bvc)),
-            // (0x70, Br(Cpu::bvs)),
+            0x90 => self.br(bus, !self.c),
+            0xB0 => self.br(bus, self.c),
+            0xD0 => self.br(bus, !self.z),
+            0xF0 => self.br(bus, self.z),
+            0x10 => self.br(bus, !self.n),
+            0x30 => self.br(bus, self.n),
+            0x50 => self.br(bus, !self.v),
+            0x70 => self.br(bus, self.v),
             0x24 => self.zp_r(bus, Cpu::bit),
             0x2C => self.abs_r(bus, Cpu::bit),
-            // (0x00, Brk),
+            0x00 => self.int(bus, VEC_IRQ, true),
             0x18 => self.imp(bus, Cpu::clc),
             0xD8 => self.imp(bus, Cpu::cld),
             0x58 => self.imp(bus, Cpu::cli),
@@ -151,9 +155,9 @@ impl Cpu {
             0xFE => self.absx_rw(bus, Cpu::inc),
             0xE8 => self.imp(bus, Cpu::inx),
             0xC8 => self.imp(bus, Cpu::iny),
-            // (0x4C, JmpAbs),
-            // (0x6C, JmpInd),
-            // (0x20, Jsr),
+            0x4C => self.jmp_abs(bus),
+            0x6C => self.jmp_ind(bus),
+            0x20 => self.jsr(bus),
             0xA9 => self.imm(bus, Cpu::lda),
             0xA5 => self.zp_r(bus, Cpu::lda),
             0xB5 => self.zpi_r(bus, Cpu::lda, self.x),
@@ -186,10 +190,10 @@ impl Cpu {
             0x19 => self.absi_r(bus, Cpu::ora, self.y),
             0x01 => self.indx_r(bus, Cpu::ora),
             0x11 => self.indy_r(bus, Cpu::ora),
-            // (0x48, Push(Cpu::pha),
-            // (0x08, Push(Cpu::php),
-            // (0x68, Pull(Cpu::pla),
-            // (0x28, Pull(Cpu::plp),
+            0x48 => self.ph(bus, self.a),
+            0x08 => self.ph(bus, self.get_flags() | (1 << 4)),
+            0x68 => self.pl(bus, Cpu::pla),
+            0x28 => self.pl(bus, Cpu::plp),
             0x2A => self.acc(bus, Cpu::rol),
             0x26 => self.zp_rw(bus, Cpu::rol),
             0x36 => self.zpx_rw(bus, Cpu::rol),
@@ -200,8 +204,8 @@ impl Cpu {
             0x76 => self.zpx_rw(bus, Cpu::ror),
             0x6E => self.abs_rw(bus, Cpu::ror),
             0x7E => self.absx_rw(bus, Cpu::ror),
-            // (0x40, Rti),
-            // (0x60, Rts),
+            0x40 => self.rti(bus),
+            0x60 => self.rts(bus),
             0xE9 => self.imm(bus, Cpu::sbc),
             0xE5 => self.zp_r(bus, Cpu::sbc),
             0xF5 => self.zpi_r(bus, Cpu::sbc, self.x),
@@ -213,19 +217,19 @@ impl Cpu {
             0x38 => self.imp(bus, Cpu::sec),
             0xF8 => self.imp(bus, Cpu::sed),
             0x78 => self.imp(bus, Cpu::sei),
-            0x85 => self.zp_w(bus, Cpu::sta),
-            0x95 => self.zpi_w(bus, Cpu::sta, self.x),
-            0x8D => self.abs_w(bus, Cpu::sta),
-            0x9D => self.absi_w(bus, Cpu::sta, self.x),
-            0x99 => self.absi_w(bus, Cpu::sta, self.y),
-            0x81 => self.indx_w(bus, Cpu::sta),
-            0x91 => self.indy_w(bus, Cpu::sta),
-            0x86 => self.zp_w(bus, Cpu::stx),
-            0x96 => self.zpi_w(bus, Cpu::stx, self.y),
-            0x8E => self.abs_w(bus, Cpu::stx),
-            0x84 => self.zp_w(bus, Cpu::sty),
-            0x94 => self.zpi_w(bus, Cpu::sty, self.x),
-            0x8C => self.abs_w(bus, Cpu::sty),
+            0x85 => self.zp_w(bus, self.a),
+            0x95 => self.zpi_w(bus, self.a, self.x),
+            0x8D => self.abs_w(bus, self.a),
+            0x9D => self.absi_w(bus, self.a, self.x),
+            0x99 => self.absi_w(bus, self.a, self.y),
+            0x81 => self.indx_w(bus, self.a),
+            0x91 => self.indy_w(bus, self.a),
+            0x86 => self.zp_w(bus, self.x),
+            0x96 => self.zpi_w(bus, self.x, self.y),
+            0x8E => self.abs_w(bus, self.x),
+            0x84 => self.zp_w(bus, self.y),
+            0x94 => self.zpi_w(bus, self.y, self.x),
+            0x8C => self.abs_w(bus, self.y),
             0xAA => self.imp(bus, Cpu::tax),
             0xA8 => self.imp(bus, Cpu::tay),
             0xBA => self.imp(bus, Cpu::tsx),
@@ -241,20 +245,16 @@ impl Cpu {
             self.pc += 1;
         }
 
-        bus.cpu_write(stack(self.s), self.pch());
-        self.s -= 1;
-        bus.cpu_write(stack(self.s), self.pcl());
-        self.s -= 1;
+        let (pcl, pch) = (self.pcl(), self.pch());
+        self.push(bus, pch);
+        self.push(bus, pcl);
 
-        bus.cpu_write(
-            stack(self.s),
-            if brk {
-                self.get_flags() | (1 << 4)
-            } else {
-                self.get_flags()
-            },
-        );
-        self.s -= 1;
+        let flags = if brk {
+            self.get_flags() | (1 << 4)
+        } else {
+            self.get_flags()
+        };
+        self.push(bus, flags);
 
         let vec_low = bus.cpu_read(vec);
         let vec_high = bus.cpu_read(vec + 1);
@@ -264,6 +264,16 @@ impl Cpu {
         self.i = true;
 
         NUM_CYCLES_INT
+    }
+
+    fn rti(&mut self, bus: &mut impl CpuBus) -> u32{
+        let flags = self.pull(bus);
+        let addr_low = self.pull(bus);
+        let addr_high = self.pull(bus);
+        self.set_flags(flags);
+        self.pc = u8_to_u16(addr_low, addr_high);
+
+        NUM_CYCLES_RTI
     }
 
     fn imp(&mut self, bus: &mut impl CpuBus, ins: InsImp) -> u32 {
@@ -284,7 +294,7 @@ impl Cpu {
         let val = bus.cpu_read(addr as u16);
         ins(self, val);
 
-        NUM_CYCLES_ZPR
+        NUM_CYCLES_ZP_R
     }
 
     fn zpi_r(&mut self, bus: &mut impl CpuBus, ins: InsR, idx: u8) -> u32 {
@@ -292,7 +302,7 @@ impl Cpu {
         let val = bus.cpu_read((addr + idx) as u16);
         ins(self, val);
 
-        NUM_CYCLES_ZPIR
+        NUM_CYCLES_ZPI_R
     }
 
     fn abs_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32 {
@@ -301,7 +311,7 @@ impl Cpu {
         let val = bus.cpu_read(u8_to_u16(addr_low, addr_high));
         ins(self, val);
 
-        NUM_CYCLES_ABSR
+        NUM_CYCLES_ABS_R
     }
 
     fn absi_r(&mut self, bus: &mut impl CpuBus, ins: InsR, idx: u8) -> u32 {
@@ -311,9 +321,9 @@ impl Cpu {
         ins(self, val);
 
         if check_overflow(addr_low, idx) {
-            NUM_CYCLES_ABSIR + 1
+            NUM_CYCLES_ABSI_R + 1
         } else {
-            NUM_CYCLES_ABSIR
+            NUM_CYCLES_ABSI_R
         }
     }
 
@@ -324,7 +334,7 @@ impl Cpu {
         let val = bus.cpu_read(u8_to_u16(addr_low, addr_high));
         ins(self, val);
 
-        NUM_CYCLES_INDXR
+        NUM_CYCLES_INDX_R
     }
 
     fn indy_r(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32 {
@@ -335,9 +345,9 @@ impl Cpu {
         ins(self, val);
 
         if check_overflow(addr_low, self.y) {
-            NUM_CYCLES_INDYR + 1
+            NUM_CYCLES_INDY_R + 1
         } else {
-            NUM_CYCLES_INDYR
+            NUM_CYCLES_INDY_R
         }
     }
 
@@ -352,7 +362,7 @@ impl Cpu {
         let val = bus.cpu_read(addr as u16);
         bus.cpu_write(addr as u16, ins(self, val));
 
-        NUM_CYCLES_ZPRW
+        NUM_CYCLES_ZP_RW
     }
 
     fn zpx_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
@@ -360,7 +370,7 @@ impl Cpu {
         let val = bus.cpu_read(addr);
         bus.cpu_write(addr, ins(self, val));
 
-        NUM_CYCLES_ZPXRW
+        NUM_CYCLES_ZPX_RW
     }
 
     fn abs_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
@@ -370,7 +380,7 @@ impl Cpu {
         let val = bus.cpu_read(addr);
         bus.cpu_write(addr, ins(self, val));
 
-        NUM_CYCLES_ABSRW
+        NUM_CYCLES_ABS_RW
     }
 
     fn absx_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
@@ -380,55 +390,121 @@ impl Cpu {
         let val = bus.cpu_read(addr);
         bus.cpu_write(addr, ins(self, val));
 
-        NUM_CYCLES_ABSXRW
+        NUM_CYCLES_ABSX_RW
     }
 
-    fn zp_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+    fn zp_w(&mut self, bus: &mut impl CpuBus, val: u8) -> u32 {
         let addr = bus.cpu_read(self.pc());
-        bus.cpu_write(addr as u16, ins(self));
+        bus.cpu_write(addr as u16, val);
 
-        NUM_CYCLES_ZPW
+        NUM_CYCLES_ZP_W
     }
 
-    fn zpi_w(&mut self, bus: &mut impl CpuBus, ins: InsW, idx: u8) -> u32 {
+    fn zpi_w(&mut self, bus: &mut impl CpuBus, val: u8, idx: u8) -> u32 {
         let addr = bus.cpu_read(self.pc());
-        bus.cpu_write((addr + idx) as u16, ins(self));
+        bus.cpu_write((addr + idx) as u16, val);
 
-        NUM_CYCLES_ZPIW
+        NUM_CYCLES_ZPI_W
     }
 
-    fn abs_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+    fn abs_w(&mut self, bus: &mut impl CpuBus, val: u8) -> u32 {
         let addr_low = bus.cpu_read(self.pc());
         let addr_high = bus.cpu_read(self.pc());
-        bus.cpu_write(u8_to_u16(addr_low, addr_high), ins(self));
+        bus.cpu_write(u8_to_u16(addr_low, addr_high), val);
 
-        NUM_CYCLES_ABSW
+        NUM_CYCLES_ABS_W
     }
 
-    fn absi_w(&mut self, bus: &mut impl CpuBus, ins: InsW, idx: u8) -> u32 {
+    fn absi_w(&mut self, bus: &mut impl CpuBus, val: u8, idx: u8) -> u32 {
         let addr_low = bus.cpu_read(self.pc());
         let addr_high = bus.cpu_read(self.pc());
-        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (idx as u16), ins(self));
+        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (idx as u16), val);
 
-        NUM_CYCLES_ABSIW
+        NUM_CYCLES_ABSI_W
     }
 
-    fn indx_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+    fn indx_w(&mut self, bus: &mut impl CpuBus, val: u8) -> u32 {
         let addr = bus.cpu_read(self.pc());
         let addr_low = bus.cpu_read((addr + self.x) as u16);
         let addr_high = bus.cpu_read((addr + self.x + 1) as u16);
-        bus.cpu_write(u8_to_u16(addr_low, addr_high), ins(self));
+        bus.cpu_write(u8_to_u16(addr_low, addr_high), val);
 
-        NUM_CYCLES_INDXW
+        NUM_CYCLES_INDX_W
     }
 
-    fn indy_w(&mut self, bus: &mut impl CpuBus, ins: InsW) -> u32 {
+    fn indy_w(&mut self, bus: &mut impl CpuBus, val: u8) -> u32 {
         let addr = bus.cpu_read(self.pc());
         let addr_low = bus.cpu_read(addr as u16);
         let addr_high = bus.cpu_read((addr + 1) as u16);
-        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (self.y as u16), ins(self));
+        bus.cpu_write(u8_to_u16(addr_low, addr_high) + (self.y as u16), val);
 
-        NUM_CYCLES_INDYW
+        NUM_CYCLES_INDY_W
+    }
+
+    fn br(&mut self, bus: &mut impl CpuBus, cond: bool) -> u32 {
+        let offset = bus.cpu_read(self.pc());
+
+        if !cond {
+            NUM_CYCLES_BR
+        } else {
+            let tmp_pc = u8_to_u16(self.pcl() + offset, self.pch());
+            self.pc = add_u16_i8(self.pc, offset as i8);
+            if self.pc == tmp_pc {
+                NUM_CYCLES_BR + 1
+            } else {
+                NUM_CYCLES_BR + 2
+            }
+        }
+    }
+
+    fn jmp_abs(&mut self, bus: &mut impl CpuBus) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let addr_high = bus.cpu_read(self.pc());
+        self.pc = u8_to_u16(addr_low, addr_high);
+
+        NUM_CYCLES_JMP_ABS
+    }
+
+    fn jmp_ind(&mut self, bus: &mut impl CpuBus) -> u32 {
+        let ptr_low = bus.cpu_read(self.pc());
+        let ptr_high = bus.cpu_read(self.pc());
+        let addr_low = bus.cpu_read(u8_to_u16(ptr_low, ptr_high));
+        let addr_high = bus.cpu_read(u8_to_u16(ptr_low + 1, ptr_high));
+        self.pc = u8_to_u16(addr_low, addr_high);
+
+        NUM_CYCLES_JMP_IND
+    }
+
+    fn jsr(&mut self, bus: &mut impl CpuBus) -> u32 {
+        let addr_low = bus.cpu_read(self.pc());
+        let (pcl, pch) = (self.pcl(), self.pch());
+        self.push(bus, pch);
+        self.push(bus, pcl);
+        let addr_high = bus.cpu_read(self.pc());
+        self.pc = u8_to_u16(addr_low, addr_high);
+
+        NUM_CYCLES_JSR
+    }
+
+    fn rts(&mut self, bus: &mut impl CpuBus) -> u32 {
+        let addr_low = self.pull(bus);
+        let addr_high = self.pull(bus);
+        self.pc = u8_to_u16(addr_low, addr_high) + 1;
+
+        NUM_CYCLES_RTS
+    }
+
+    fn ph(&mut self, bus: &mut impl CpuBus, val: u8) -> u32 {
+        self.push(bus, val);
+
+        NUM_CYCLES_PUSH
+    }
+
+    fn pl(&mut self, bus: &mut impl CpuBus, ins: InsR) -> u32 {
+        let val = self.pull(bus);
+        ins(self, val);
+
+        NUM_CYCLES_PULL
     }
 
     fn pc(&mut self) -> u16 {
@@ -442,6 +518,16 @@ impl Cpu {
 
     fn pch(&self) -> u8 {
         (self.pc >> 8) as u8
+    }
+
+    fn push(&mut self, bus: &mut impl CpuBus, val: u8) {
+        bus.cpu_write(stack(self.s), val);
+        self.s -= 1;
+    }
+
+    fn pull(&mut self, bus: &mut impl CpuBus) -> u8 {
+        self.s += 1;
+        bus.cpu_read(stack(self.s))
     }
 
     fn set_zn(&mut self, val: u8) {
@@ -501,42 +587,10 @@ impl Cpu {
         val << 1
     }
 
-    fn bcc(&self) -> bool {
-        !self.c
-    }
-
-    fn bcs(&self) -> bool {
-        self.c
-    }
-
-    fn beq(&self) -> bool {
-        self.z
-    }
-
     fn bit(&mut self, val: u8) {
         self.n = (val & 0x80) != 0;
         self.v = (val & 0x40) != 0;
         self.z = (self.a & val) == 0;
-    }
-
-    fn bmi(&self) -> bool {
-        self.n
-    }
-
-    fn bne(&self) -> bool {
-        !self.z
-    }
-
-    fn bpl(&self) -> bool {
-        !self.n
-    }
-
-    fn bvc(&self) -> bool {
-        !self.v
-    }
-
-    fn bvs(&self) -> bool {
-        self.v
     }
 
     fn clc(&mut self) {
@@ -636,14 +690,6 @@ impl Cpu {
         self.set_zn(self.a);
     }
 
-    fn pha(&self) -> u8 {
-        self.a
-    }
-
-    fn php(&self) -> u8 {
-        self.get_flags() | (1 << 4)
-    }
-
     fn pla(&mut self, val: u8) {
         self.a = val;
     }
@@ -690,18 +736,6 @@ impl Cpu {
         self.i = true;
     }
 
-    fn sta(&self) -> u8 {
-        self.a
-    }
-
-    fn stx(&self) -> u8 {
-        self.x
-    }
-
-    fn sty(&self) -> u8 {
-        self.y
-    }
-
     fn tax(&mut self) {
         self.x = self.a;
         self.set_zn(self.x);
@@ -734,6 +768,12 @@ impl Cpu {
 
 fn u8_to_u16(low: u8, high: u8) -> u16 {
     ((high as u16) << 8) | (low as u16)
+}
+
+fn add_u16_i8(val: u16, offset: i8) -> u16 {
+    let val = val as i16;
+    let offset = offset as i16;
+    (val + offset) as u16
 }
 
 fn check_overflow(val_0: u8, val_1: u8) -> bool {
