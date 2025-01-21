@@ -22,7 +22,7 @@ pub struct Cpu {
 }
 
 pub trait CpuBus {
-    fn cpu_read(&self, addr: u16) -> u8;
+    fn cpu_read(&mut self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, data: u8);
 }
 
@@ -266,7 +266,7 @@ impl Cpu {
         NUM_CYCLES_INT
     }
 
-    fn rti(&mut self, bus: &mut impl CpuBus) -> u32{
+    fn rti(&mut self, bus: &mut impl CpuBus) -> u32 {
         let flags = self.pull(bus);
         let addr_low = self.pull(bus);
         let addr_high = self.pull(bus);
@@ -565,7 +565,7 @@ impl Cpu {
         if self.c {
             flags |= 1 << 0;
         }
-        return flags;
+        flags
     }
 
     fn adc(&mut self, val: u8) {
@@ -577,7 +577,7 @@ impl Cpu {
     }
 
     fn and(&mut self, val: u8) {
-        self.a = self.a & val;
+        self.a &= val;
         self.set_zn(self.a);
     }
 
@@ -641,7 +641,7 @@ impl Cpu {
     }
 
     fn eor(&mut self, val: u8) {
-        self.a = self.a ^ val;
+        self.a ^= val;
         self.set_zn(self.a);
     }
 
@@ -686,7 +686,7 @@ impl Cpu {
     fn nop(&mut self) {}
 
     fn ora(&mut self, val: u8) {
-        self.a = self.a | val;
+        self.a |= val;
         self.set_zn(self.a);
     }
 

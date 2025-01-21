@@ -14,7 +14,7 @@ impl Default for TestCpuBus {
 }
 
 impl CpuBus for TestCpuBus {
-    fn cpu_read(&self, addr: u16) -> u8 {
+    fn cpu_read(&mut self, addr: u16) -> u8 {
         self.mem[addr as usize]
     }
 
