@@ -31,26 +31,22 @@ pub struct Nes {
     ppu: Ppu,
     ram: [u8; RAM_SIZE],
     cartridge: Box<dyn Cartridge>,
-    cpu_bus_val: u8,
-    ppu_bus_val: u8,
 }
 
 macro_rules! cpu_bus {
-    ( $x:expr ) => {
+    ($ram:expr, $ppu:expr, $cart:expr) => {
         &mut NesCpuBus {
-            ram: &mut $x.ram,
-            ppu: &mut $x.ppu,
-            cartridge: &mut *$x.cartridge,
-            cpu_bus_val: &mut $x.cpu_bus_val,
+            ram: &mut $ram,
+            ppu: &mut $ppu,
+            cartridge: &mut $cart,
         }
     };
 }
 
 macro_rules! ppu_bus {
-    ( $x:expr ) => {
+    ( $cart:expr ) => {
         &mut NesPpuBus {
-            cartridge: &mut *$x.cartridge,
-            ppu_bus_val: &mut $x.ppu_bus_val,
+            cartridge: &mut $cart,
         }
     };
 }
@@ -62,12 +58,10 @@ impl Nes {
             ppu: Ppu::default(),
             ram: [0xff; RAM_SIZE],
             cartridge: cart_init(rom),
-            cpu_bus_val: 0,
-            ppu_bus_val: 0,
         };
 
         nes.cpu.reset = true;
-        nes.cpu.step(cpu_bus!(nes));
+        nes.cpu.step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge));
         nes.cpu.reset = false;
         
         nes
@@ -76,7 +70,7 @@ impl Nes {
     pub fn step(&mut self) {
         let (cpu, ppu) = (&mut self.cpu, &mut self.ppu);
 
-        cpu.step(cpu_bus!(self));
+        cpu.step(cpu_bus!(self.ram, self.ppu, *self.cartridge));
     }
 }
 
@@ -84,35 +78,34 @@ struct NesCpuBus<'a> {
     ram: &'a mut [u8; RAM_SIZE],
     ppu: &'a mut Ppu,
     cartridge: &'a mut dyn Cartridge,
-    cpu_bus_val: &'a mut u8,
 }
 
 impl CpuBus for NesCpuBus<'_> {
     fn cpu_read(&mut self, addr: u16) -> u8 {
-        *self.cpu_bus_val = match addr {
+        match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
             CPU_CART_START..=CPU_CART_END => self
                 .cartridge
                 .cpu_read(addr)
-                .unwrap_or_else(|| *self.cpu_bus_val),
-            _ => *self.cpu_bus_val,
-        };
-
-        *self.cpu_bus_val
+                .unwrap_or_else(|| 0x00),
+            0x01 => ppu_bus!(*self.cartridge).ppu_read(0), //proof of concept: can instantiate and pass in a PPU bus here when accessing PPU bus via CPU bus
+            _ => 0x00,
+        }
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {}
+    fn cpu_write(&mut self, addr: u16, data: u8) {
+    }
 }
 
 struct NesPpuBus<'a> {
     cartridge: &'a mut dyn Cartridge,
-    ppu_bus_val: &'a mut u8,
 }
 
 impl PpuBus for NesPpuBus<'_> {
     fn ppu_read(&mut self, addr: u16) -> u8 {
-        self.cartridge.ppu_read(0).unwrap()
+        0x00
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) {}
+    fn ppu_write(&mut self, addr: u16, data: u8) {
+    }
 }
