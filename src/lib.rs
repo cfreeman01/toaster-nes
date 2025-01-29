@@ -63,7 +63,7 @@ impl Nes {
         nes.cpu.reset = true;
         nes.cpu.step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge));
         nes.cpu.reset = false;
-        
+
         nes
     }
 
@@ -84,17 +84,13 @@ impl CpuBus for NesCpuBus<'_> {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
-            CPU_CART_START..=CPU_CART_END => self
-                .cartridge
-                .cpu_read(addr)
-                .unwrap_or_else(|| 0x00),
+            CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr).unwrap_or_else(|| 0x00),
             0x01 => ppu_bus!(*self.cartridge).ppu_read(0), //proof of concept: can instantiate and pass in a PPU bus here when accessing PPU bus via CPU bus
             _ => 0x00,
         }
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {
-    }
+    fn cpu_write(&mut self, addr: u16, data: u8) {}
 }
 
 struct NesPpuBus<'a> {
@@ -106,6 +102,5 @@ impl PpuBus for NesPpuBus<'_> {
         0x00
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) {
-    }
+    fn ppu_write(&mut self, addr: u16, data: u8) {}
 }

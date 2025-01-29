@@ -16,7 +16,7 @@ fn main() {
 
     let mut nes = Nes::init(&rom);
 
-    loop{
+    loop {
         nes.step();
     }
 }

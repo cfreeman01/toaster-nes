@@ -1,8 +1,19 @@
+mod ppu_regs;
+
 #[cfg(test)]
 mod test;
 
+use ppu_regs::*;
+
 #[derive(Default)]
-pub struct Ppu {}
+pub struct Ppu {
+    ppu_ctrl: PpuCtrl,
+    ppu_mask: PpuMask,
+    v: VramAddr,
+    t: VramAddr,
+    w: bool,
+    x: u8,
+}
 
 pub trait PpuBus {
     fn ppu_read(&mut self, addr: u16) -> u8;
