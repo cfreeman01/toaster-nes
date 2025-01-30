@@ -1,11 +1,11 @@
 macro_rules! mask {
     ($pos:expr, $width:expr) => {{
-        let mut val = 0;
+        let mut mask = 0;
         for _ in 0..$width {
-            val <<= 1;
-            val |= 0x1;
+            mask <<= 1;
+            mask |= 0x1;
         }
-        val << $pos
+        mask << $pos
     }};
 }
 
@@ -36,6 +36,9 @@ impl VramAddr {
     get_set_field!(nx, set_nx, 10, 1, u16);
     get_set_field!(ny, set_ny, 11, 1, u16);
     get_set_field!(fine_y, set_fine_y, 12, 3, u16);
+    get_set_field!(addr, set_addr, 0, 14, u16);
+    get_set_field!(addr_low, set_addr_low, 0, 8, u16);
+    get_set_field!(addr_hi, set_addr_hi, 8, 6, u16);
 }
 
 #[derive(Default)]
@@ -43,7 +46,7 @@ pub struct PpuCtrl {
     pub data: u8,
 }
 
-impl PpuCtrl{
+impl PpuCtrl {
     get_set_field!(n, set_n, 0, 2, u8);
     get_set_field!(nx, set_nx, 0, 1, u8);
     get_set_field!(ny, set_ny, 1, 1, u8);
@@ -56,11 +59,22 @@ impl PpuCtrl{
 }
 
 #[derive(Default)]
-pub struct PpuMask{
+pub struct PpuMask {
     pub data: u8,
 }
 
-impl PpuMask{
+impl PpuMask {
     get_set_field!(b, set_b, 3, 1, u8);
     get_set_field!(s, set_s, 4, 1, u8);
+}
+
+#[derive(Default)]
+pub struct PpuStatus {
+    pub data: u8,
+}
+
+impl PpuStatus {
+    get_set_field!(o, set_o, 5, 1, u8);
+    get_set_field!(s, set_s, 6, 1, u8);
+    get_set_field!(v, set_v, 7, 1, u8);
 }

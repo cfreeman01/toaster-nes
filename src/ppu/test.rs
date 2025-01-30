@@ -48,3 +48,24 @@ fn get_set_v() {
     ppu.v.set_fine_y(0x5);
     assert_eq!(ppu.v.data, 0x571F);
 }
+
+#[test]
+fn reg_write() {
+    let (mut ppu, mut bus) = init();
+
+    ppu.cpu_write(0x2000, 0x01, &mut bus);
+    assert_eq!(ppu.t.n(), 0x01);
+    assert_eq!(ppu.t.nx(), 1);
+    assert_eq!(ppu.t.ny(), 0);
+    ppu.cpu_write(0x2005, 0x7D, &mut bus);
+    assert_eq!(ppu.x, 0x5);
+    assert_eq!(ppu.t.coarse_x(), 0xF);
+    ppu.cpu_write(0x2005, 0x5E, &mut bus);
+    assert_eq!(ppu.t.fine_y(), 0x6);
+    assert_eq!(ppu.t.coarse_y(), 0xB);
+    ppu.cpu_write(0x2006, 0x3D, &mut bus);
+    assert_eq!(ppu.t.addr_hi(), 0x3D);
+    ppu.cpu_write(0x2006, 0xF0, &mut bus);
+    assert_eq!(ppu.t.addr_low(), 0xF0);
+    assert_eq!(ppu.v.data, 0x3DF0);
+}

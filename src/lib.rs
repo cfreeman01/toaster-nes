@@ -25,6 +25,8 @@ const CPU_CART_START: u16 = 0x4020;
 const CPU_CART_END: u16 = 0xFFFF;
 const PPU_CART_START: u16 = 0x0000;
 const PPU_CART_END: u16 = 0x3EFF;
+const PPU_REG_START: u16 = 0x2000;
+const PPU_REG_END: u16 = 0x3FFF;
 
 pub struct Nes {
     cpu: Cpu,
