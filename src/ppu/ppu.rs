@@ -1,9 +1,12 @@
 mod ppu_regs;
 
+mod ppu_palette;
+
 #[cfg(test)]
 mod test;
 
-use crate::{PPU_REG_END, PPU_REG_START};
+use crate::{PPU_REG_END, PPU_REG_START, FRAME_SIZE_BYTES};
+use ppu_palette::*;
 use ppu_regs::*;
 
 const PPU_CTRL: u16 = 0;
@@ -28,14 +31,15 @@ macro_rules! field {
 
 #[derive(Default)]
 pub struct Ppu {
-    ppu_ctrl: PpuCtrl,
-    ppu_mask: PpuMask,
-    ppu_status: PpuStatus,
+    ctrl: PpuCtrl,
+    mask: PpuMask,
+    status: PpuStatus,
     v: VramAddr,
     t: VramAddr,
     w: bool,
     x: u8,
-    ppu_read_buf: u8,
+    read_buf: u8,
+    palette_ram: [u8; 32],
 }
 
 pub trait PpuBus {
@@ -44,18 +48,32 @@ pub trait PpuBus {
 }
 
 impl Ppu {
-    pub fn step(&mut self, ppu_bus: &mut impl PpuBus) {}
+    pub fn step(&mut self, ppu_bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        let Rgb(r, g, b) = self.get_color(0x00);
+
+        frame[0] = r;
+        frame[1] = g;
+        frame[2] = b;
+        frame[3] = r;
+        frame[4] = g;
+        frame[5] = b;
+        frame[6] = r;
+        frame[7] = g;
+        frame[8] = b;
+    }
 
     pub fn cpu_read(&mut self, addr: u16, bus: &mut impl PpuBus) -> u8 {
         match addr % 8 {
             PPU_STATUS => {
+                let val = self.status.data;
+                self.status.set_v(0);
                 self.w = false;
-                self.ppu_status.data
+                val
             }
             PPU_DATA => {
-                let val = self.ppu_read_buf;
-                self.ppu_read_buf = bus.ppu_read(self.v.addr());
-                self.v.data += if self.ppu_ctrl.i() == 1 { 32 } else { 1 };
+                let val = self.read_buf;
+                self.read_buf = bus.ppu_read(self.v.addr());
+                self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 };
                 val
             }
             _ => 0x0,
@@ -65,11 +83,11 @@ impl Ppu {
     pub fn cpu_write(&mut self, addr: u16, data: u8, ppu_bus: &mut impl PpuBus) {
         match addr % 8 {
             PPU_CTRL => {
-                self.ppu_ctrl.data = data;
+                self.ctrl.data = data;
                 self.t.set_n(field!(data, 0, 2) as u16);
             }
             PPU_MASK => {
-                self.ppu_mask.data = data;
+                self.mask.data = data;
             }
             PPU_SCROLL => {
                 if !self.w {
@@ -94,8 +112,12 @@ impl Ppu {
                 }
             }
             PPU_DATA => {
-                ppu_bus.ppu_write(self.v.addr(), data);
-                self.v.data += if self.ppu_ctrl.i() == 1 { 32 } else { 1 }
+                if self.v.addr() >= 0x3F00{
+                    self.palette_ram[self.v.addr() as usize % 32] = data;
+                } else{
+                    ppu_bus.ppu_write(self.v.addr(), data);
+                }
+                self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 }
             }
             _ => (),
         }
@@ -138,5 +160,15 @@ impl Ppu {
         self.v.set_coarse_y(coarse_y);
         self.v.set_fine_y(fine_y);
         self.v.set_ny(ny);
+    }
+
+    fn get_color(&self, palette_ram_addr: u8) -> Rgb {
+        let mut addr = (palette_ram_addr % 32) as usize;
+    
+        if addr % 4 == 0 {
+            addr = 0;
+        };
+    
+        PPU_PALETTE[(self.palette_ram[addr] % 64) as usize]
     }
 }

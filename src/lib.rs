@@ -18,6 +18,9 @@ use cpu::{Cpu, CpuBus};
 use ppu::{Ppu, PpuBus};
 use rom::Rom;
 
+pub const DISPLAY_WIDTH: u32 = 256;
+pub const DISPLAY_HEIGHT: u32 = 240;
+pub const FRAME_SIZE_BYTES: usize = (DISPLAY_WIDTH * DISPLAY_HEIGHT * 3) as usize;
 const RAM_SIZE: usize = 0x800;
 const RAM_START: u16 = 0x0000;
 const RAM_END: u16 = 0x1FFF;
@@ -62,6 +65,8 @@ impl Nes {
             cartridge: cart_init(rom),
         };
 
+        //nes.ppu.status.data = 0x80;
+
         nes.cpu.reset = true;
         nes.cpu.step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge));
         nes.cpu.reset = false;
@@ -69,10 +74,12 @@ impl Nes {
         nes
     }
 
-    pub fn step(&mut self) {
-        let (cpu, ppu) = (&mut self.cpu, &mut self.ppu);
+    pub fn step(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        let cycles = self.cpu.step(cpu_bus!(self.ram, self.ppu, *self.cartridge));
 
-        cpu.step(cpu_bus!(self.ram, self.ppu, *self.cartridge));
+        for _ in 0..cycles * 3 {
+            self.ppu.step(ppu_bus!(*self.cartridge), frame);
+        }
     }
 }
 
@@ -86,13 +93,22 @@ impl CpuBus for NesCpuBus<'_> {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
-            CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr).unwrap_or_else(|| 0x00),
-            0x01 => ppu_bus!(*self.cartridge).ppu_read(0), //proof of concept: can instantiate and pass in a PPU bus here when accessing PPU bus via CPU bus
+            PPU_REG_START..=PPU_REG_END => self.ppu.cpu_read(addr, ppu_bus!(*self.cartridge)),
+            CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr),
             _ => 0x00,
         }
     }
 
-    fn cpu_write(&mut self, addr: u16, data: u8) {}
+    fn cpu_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE] = data,
+            PPU_REG_START..=PPU_REG_END => {
+                self.ppu.cpu_write(addr, data, ppu_bus!(*self.cartridge))
+            }
+            CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_write(addr, data),
+            _ => (),
+        };
+    }
 }
 
 struct NesPpuBus<'a> {
@@ -101,8 +117,16 @@ struct NesPpuBus<'a> {
 
 impl PpuBus for NesPpuBus<'_> {
     fn ppu_read(&mut self, addr: u16) -> u8 {
-        0x00
+        match addr {
+            PPU_CART_START..=PPU_CART_END => self.cartridge.ppu_read(addr),
+            _ => 0x00,
+        }
     }
 
-    fn ppu_write(&mut self, addr: u16, data: u8) {}
+    fn ppu_write(&mut self, addr: u16, data: u8) {
+        match addr {
+            PPU_CART_START..=PPU_CART_END => self.cartridge.ppu_write(addr, data),
+            _ => (),
+        }
+    }
 }

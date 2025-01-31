@@ -5,9 +5,9 @@ use crate::rom::Rom;
 use mapper0::Mapper0;
 
 pub trait Cartridge {
-    fn cpu_read(&mut self, addr: u16) -> Option<u8>;
+    fn cpu_read(&mut self, addr: u16) -> u8;
     fn cpu_write(&mut self, addr: u16, data: u8);
-    fn ppu_read(&mut self, addr: u16) -> Option<u8>;
+    fn ppu_read(&mut self, addr: u16) -> u8;
     fn ppu_write(&mut self, addr: u16, data: u8);
 }
 
