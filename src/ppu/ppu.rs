@@ -65,18 +65,6 @@ impl Ppu {
 
         self.frame_cycle = (self.frame_cycle + 1) % CYCLES_PER_FRAME;
         self.cycles += 1;
-
-        let Rgb(r, g, b) = self.get_color(0x00);
-
-        frame[0] = r;
-        frame[1] = g;
-        frame[2] = b;
-        frame[3] = r;
-        frame[4] = g;
-        frame[5] = b;
-        frame[6] = r;
-        frame[7] = g;
-        frame[8] = b;
     }
 
     pub fn cpu_read(&mut self, addr: u16, bus: &mut impl PpuBus) -> u8 {
