@@ -19,6 +19,7 @@ pub struct Cpu {
     pub nmi: bool,
     prev_nmi: bool,
     cycles: u32,
+    ins_cycles: u32,
 }
 
 pub trait CpuBus {
@@ -65,22 +66,35 @@ type InsRW = fn(&mut Cpu, val: u8) -> u8;
 type InsImp = fn(&mut Cpu);
 
 impl Cpu {
-    pub fn step(&mut self, bus: &mut impl CpuBus) -> u32 {
-        let num_cycles = if self.reset {
-            self.int(bus, VEC_RESET, false)
-        } else if self.nmi && !self.prev_nmi {
-            self.int(bus, VEC_NMI, false)
-        } else if self.irq && !self.i {
-            self.int(bus, VEC_IRQ, false)
-        } else {
-            let opcode = bus.cpu_read(self.pc());
-            self.exec(bus, opcode)
-        };
+    pub fn tick(&mut self, bus: &mut impl CpuBus) {
+        if self.ins_cycles == 0 {
+            self.ins_cycles = if self.reset {
+                self.int(bus, VEC_RESET, false)
+            } else if self.nmi && !self.prev_nmi {
+                self.int(bus, VEC_NMI, false)
+            } else if self.irq && !self.i {
+                self.int(bus, VEC_IRQ, false)
+            } else {
+                let opcode = bus.cpu_read(self.pc());
+                self.exec(bus, opcode)
+            };
 
-        self.prev_nmi = self.nmi;
+            self.prev_nmi = self.nmi;
+        }
 
-        self.cycles += num_cycles;
-        num_cycles
+        self.cycles += 1;
+        self.ins_cycles -= 1;
+    }
+
+    pub fn step(&mut self, bus: &mut impl CpuBus) {
+        while {
+            self.tick(bus);
+            self.ins_cycles != 0
+        } {}
+    }
+
+    pub fn cycles(&self) -> u32 {
+        self.cycles
     }
 
     fn exec(&mut self, bus: &mut impl CpuBus, opcode: u8) -> u32 {

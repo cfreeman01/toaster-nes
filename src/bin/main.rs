@@ -1,11 +1,11 @@
-#[path = "media/media.rs"]
-pub mod media;
+#[path = "window/window.rs"]
+pub mod window;
 
-use media::{Media, MediaEvent::*};
 use std::env;
 use std::fs;
 use toaster_nes::rom::{rom_get_info, rom_parse};
 use toaster_nes::*;
+use window::Window;
 
 const WINDOW_TITLE: &str = "ToasterNES";
 const WINDOW_SCALE: u32 = 3;
@@ -20,19 +20,14 @@ fn main() {
 
     let mut nes = Nes::init(&rom);
 
-    let mut media = Media::init(WINDOW_TITLE, DISPLAY_WIDTH, DISPLAY_HEIGHT, WINDOW_SCALE);
+    let mut window = Window::init(WINDOW_TITLE, DISPLAY_WIDTH, DISPLAY_HEIGHT, WINDOW_SCALE);
 
     let mut frame = [0; FRAME_SIZE_BYTES];
 
-    loop {
-        if let Some(event) = media.poll_event() {
-            match event {
-                Quit => break,
-                _ => (),
-            }
-        }
+    while !window.closed() {
+        nes.frame(&mut frame);
 
-        nes.step(&mut frame);
-        media.render(&frame);
+        window.poll_events();
+        window.render(&frame);
     }
 }

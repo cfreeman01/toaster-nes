@@ -5,7 +5,7 @@ mod ppu_palette;
 #[cfg(test)]
 mod test;
 
-use crate::{PPU_REG_END, PPU_REG_START, FRAME_SIZE_BYTES};
+use crate::{FRAME_SIZE_BYTES, PPU_REG_END, PPU_REG_START};
 use ppu_palette::*;
 use ppu_regs::*;
 
@@ -17,6 +17,10 @@ const OAM_DATA: u16 = 4;
 const PPU_SCROLL: u16 = 5;
 const PPU_ADDR: u16 = 6;
 const PPU_DATA: u16 = 7;
+const PALETTE_RAM_SIZE: usize = 32;
+pub const ROW_SIZE: u32 = 341;
+pub const NUM_ROWS: u32 = 262;
+pub const CYCLES_PER_FRAME: u32 = ROW_SIZE * NUM_ROWS;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -39,7 +43,9 @@ pub struct Ppu {
     w: bool,
     x: u8,
     read_buf: u8,
-    palette_ram: [u8; 32],
+    palette_ram: [u8; PALETTE_RAM_SIZE],
+    cycles: u32,
+    frame_cycle: u32,
 }
 
 pub trait PpuBus {
@@ -48,7 +54,18 @@ pub trait PpuBus {
 }
 
 impl Ppu {
-    pub fn step(&mut self, ppu_bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+    pub fn tick(&mut self, ppu_bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
+
+        match (row, col) {
+            (241, 1) => self.status.set_v(1),
+            (261, 1) => self.status.set_v(0),
+            _ => (),
+        };
+
+        self.frame_cycle = (self.frame_cycle + 1) % CYCLES_PER_FRAME;
+        self.cycles += 1;
+
         let Rgb(r, g, b) = self.get_color(0x00);
 
         frame[0] = r;
@@ -112,15 +129,19 @@ impl Ppu {
                 }
             }
             PPU_DATA => {
-                if self.v.addr() >= 0x3F00{
-                    self.palette_ram[self.v.addr() as usize % 32] = data;
-                } else{
+                if self.v.addr() >= 0x3F00 {
+                    self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE] = data;
+                } else {
                     ppu_bus.ppu_write(self.v.addr(), data);
                 }
                 self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 }
             }
             _ => (),
         }
+    }
+
+    pub fn cycles(&self) -> u32 {
+        self.cycles
     }
 
     fn inc_v_hor(&mut self) {
@@ -163,12 +184,12 @@ impl Ppu {
     }
 
     fn get_color(&self, palette_ram_addr: u8) -> Rgb {
-        let mut addr = (palette_ram_addr % 32) as usize;
-    
+        let mut addr = palette_ram_addr as usize % PALETTE_RAM_SIZE;
+
         if addr % 4 == 0 {
             addr = 0;
         };
-    
-        PPU_PALETTE[(self.palette_ram[addr] % 64) as usize]
+
+        PPU_PALETTE[self.palette_ram[addr] as usize % PALETTE_SIZE]
     }
 }

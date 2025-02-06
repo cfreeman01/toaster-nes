@@ -65,8 +65,6 @@ impl Nes {
             cartridge: cart_init(rom),
         };
 
-        //nes.ppu.status.data = 0x80;
-
         nes.cpu.reset = true;
         nes.cpu.step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge));
         nes.cpu.reset = false;
@@ -74,11 +72,17 @@ impl Nes {
         nes
     }
 
-    pub fn step(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
-        let cycles = self.cpu.step(cpu_bus!(self.ram, self.ppu, *self.cartridge));
+    pub fn frame(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        for _ in 0..ppu::CYCLES_PER_FRAME {
+            self.tick(frame);
+        }
+    }
 
-        for _ in 0..cycles * 3 {
-            self.ppu.step(ppu_bus!(*self.cartridge), frame);
+    fn tick(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        self.ppu.tick(ppu_bus!(*self.cartridge), frame);
+
+        if self.ppu.cycles() % 3 == 0 {
+            self.cpu.tick(cpu_bus!(self.ram, self.ppu, *self.cartridge));
         }
     }
 }
