@@ -5,7 +5,7 @@ mod ppu_palette;
 #[cfg(test)]
 mod test;
 
-use crate::{FRAME_SIZE_BYTES, PPU_REG_END, PPU_REG_START};
+use crate::{DISPLAY_HEIGHT, DISPLAY_WIDTH, FRAME_SIZE_BYTES, PPU_REG_END, PPU_REG_START};
 use ppu_palette::*;
 use ppu_regs::*;
 
@@ -44,6 +44,15 @@ pub struct Ppu {
     x: u8,
     read_buf: u8,
     palette_ram: [u8; PALETTE_RAM_SIZE],
+    nmi: bool,
+    bg_shift_0: u16,
+    bg_shift_1: u16,
+    at_shift_0: u16,
+    at_shift_1: u16,
+    nt_next: u8,
+    at_next: u8,
+    bg_next_0: u8,
+    bg_next_1: u8,
     cycles: u32,
     frame_cycle: u32,
 }
@@ -54,15 +63,30 @@ pub trait PpuBus {
 }
 
 impl Ppu {
-    pub fn tick(&mut self, ppu_bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+    pub fn tick(&mut self, bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
 
-        match (row, col) {
-            (241, 1) => self.status.set_v(1),
-            (261, 1) => self.status.set_v(0),
-            _ => (),
-        };
+        if row < DISPLAY_HEIGHT || row == NUM_ROWS {
+            if (col >= 2 && col < 258) || (col >= 321 && col < 337) {
+                match (col - 1) % 8 {
+                    0 => self.fetch_nt(),
+                    2 => self.fetch_at(),
+                    4 => self.fetch_bg_0(),
+                    6 => self.fetch_bg_1(),
+                    7 => self.inc_v_hor(),
+                    _ => (),
+                };
+            }
+        }
 
+        if row == DISPLAY_HEIGHT + 1 && col == 1 {
+            self.status.set_v(1)
+        }
+        if row == NUM_ROWS - 1 && col == 1 {
+            self.status.set_v(0)
+        }
+
+        self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
         self.frame_cycle = (self.frame_cycle + 1) % CYCLES_PER_FRAME;
         self.cycles += 1;
     }
@@ -85,7 +109,7 @@ impl Ppu {
         }
     }
 
-    pub fn cpu_write(&mut self, addr: u16, data: u8, ppu_bus: &mut impl PpuBus) {
+    pub fn cpu_write(&mut self, addr: u16, data: u8, bus: &mut impl PpuBus) {
         match addr % 8 {
             PPU_CTRL => {
                 self.ctrl.data = data;
@@ -120,7 +144,7 @@ impl Ppu {
                 if self.v.addr() >= 0x3F00 {
                     self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE] = data;
                 } else {
-                    ppu_bus.ppu_write(self.v.addr(), data);
+                    bus.ppu_write(self.v.addr(), data);
                 }
                 self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 }
             }
@@ -131,6 +155,18 @@ impl Ppu {
     pub fn cycles(&self) -> u32 {
         self.cycles
     }
+
+    pub fn nmi(&self) -> bool {
+        self.nmi
+    }
+
+    fn fetch_nt(&mut self) {}
+
+    fn fetch_at(&mut self) {}
+
+    fn fetch_bg_0(&mut self) {}
+
+    fn fetch_bg_1(&mut self) {}
 
     fn inc_v_hor(&mut self) {
         let mut coarse_x = self.v.coarse_x();

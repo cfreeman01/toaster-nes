@@ -81,6 +81,8 @@ impl Nes {
     fn tick(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         self.ppu.tick(ppu_bus!(*self.cartridge), frame);
 
+        self.cpu.nmi = self.ppu.nmi();
+
         if self.ppu.cycles() % 3 == 0 {
             self.cpu.tick(cpu_bus!(self.ram, self.ppu, *self.cartridge));
         }

@@ -1,6 +1,6 @@
+use core::str;
 use gl::{types::*, VERTEX_SHADER};
 use glfw::{Action, Context, Glfw, GlfwReceiver, Key, PWindow, WindowEvent};
-use core::str;
 use std::{
     ffi::{c_void, CString},
     ptr,
@@ -70,9 +70,15 @@ impl Window {
             .expect("Failed to create window.");
 
         window.set_key_polling(true);
+        window.set_size_limits(Some(native_width), Some(native_height), None, None);
+        window.set_aspect_ratio(native_width, native_height);
         window.make_current();
 
         gl::load_with(|ptr| window.get_proc_address(ptr) as *const _);
+
+        window.set_size_callback(|window, width, height| unsafe {
+            gl::Viewport(0, 0, width, height)
+        });
 
         let mut vao_ptr: *mut u32 = std::ptr::null_mut();
         let mut vao;
