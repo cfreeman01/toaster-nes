@@ -1,3 +1,5 @@
+use super::ATTR_TABLE_OFFSET;
+
 macro_rules! mask {
     ($pos:expr, $width:expr) => {{
         let mut mask = 0;
@@ -39,6 +41,7 @@ impl VramAddr {
     get_set_field!(addr, set_addr, 0, 14, u16);
     get_set_field!(addr_low, set_addr_low, 0, 8, u16);
     get_set_field!(addr_hi, set_addr_hi, 8, 6, u16);
+    get_set_field!(nt_addr, set_nt_addr, 0, 12, u16);
 }
 
 #[derive(Default)]
@@ -77,4 +80,51 @@ impl PpuStatus {
     get_set_field!(o, set_o, 5, 1, u8);
     get_set_field!(s, set_s, 6, 1, u8);
     get_set_field!(v, set_v, 7, 1, u8);
+}
+
+pub struct AttrAddr {
+    data: u16,
+}
+
+impl Default for AttrAddr {
+    fn default() -> Self {
+        Self {
+            data: ATTR_TABLE_OFFSET as u16,
+        }
+    }
+}
+
+impl AttrAddr {
+    pub fn data(&self) -> u16 {
+        self.data
+    }
+
+    get_set_field!(tile_group_x, set_tile_group_x, 0, 3, u16);
+    get_set_field!(tile_group_y, set_tile_group_y, 3, 3, u16);
+    get_set_field!(n, set_n, 10, 2, u16);
+}
+
+#[derive(Default)]
+pub struct PatternAddr {
+    pub data: u16,
+}
+
+impl PatternAddr {
+    get_set_field!(fine_y, set_fine_y, 0, 3, u16);
+    get_set_field!(p, set_p, 3, 1, u16);
+    get_set_field!(tile, set_tile, 4, 8, u16);
+    get_set_field!(h, set_h, 12, 1, u16);
+}
+
+#[derive(Default)]
+pub struct PaletteAddr {
+    pub data: u16,
+}
+
+impl PaletteAddr {
+    get_set_field!(p0, set_p0, 0, 1, u16);
+    get_set_field!(p1, set_p1, 1, 1, u16);
+    get_set_field!(a0, set_a0, 2, 1, u16);
+    get_set_field!(a1, set_a1, 3, 1, u16);
+    get_set_field!(s, set_s, 4, 1, u16);
 }

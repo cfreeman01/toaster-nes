@@ -1,24 +1,7 @@
 use std::cell::RefCell;
 
-use crate::cartridge::Cartridge;
+use super::*;
 use crate::rom::Rom;
-
-const PRG_RAM_START: u16 = 0x6000;
-const PRG_RAM_END: u16 = 0x7FFF;
-const PRG_ROM_START: u16 = 0x8000;
-const PRG_ROM_END: u16 = 0xFFFF;
-const PATTERN_START: u16 = 0x0000;
-const PATTERN_END: u16 = 0x1FFF;
-const VRAM_SIZE: usize = 0x800;
-const NAMETABLE_SIZE: u16 = (VRAM_SIZE / 2) as u16;
-const NAMETABLE_0_START: u16 = 0x2000;
-const NAMETABLE_0_END: u16 = NAMETABLE_0_START + (NAMETABLE_SIZE - 1);
-const NAMETABLE_1_START: u16 = NAMETABLE_0_END + 1;
-const NAMETABLE_1_END: u16 = NAMETABLE_1_START + (NAMETABLE_SIZE - 1);
-const NAMETABLE_2_START: u16 = NAMETABLE_1_END + 1;
-const NAMETABLE_2_END: u16 = NAMETABLE_2_START + (NAMETABLE_SIZE - 1);
-const NAMETABLE_3_START: u16 = NAMETABLE_2_END + 1;
-const NAMETABLE_3_END: u16 = NAMETABLE_3_START + (NAMETABLE_SIZE - 1);
 
 pub struct Mapper0 {
     prg_rom: Vec<u8>,

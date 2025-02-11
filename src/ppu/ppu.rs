@@ -5,10 +5,14 @@ mod ppu_palette;
 #[cfg(test)]
 mod test;
 
+use crate::cartridge::NAMETABLE_0_START;
 use crate::{DISPLAY_HEIGHT, DISPLAY_WIDTH, FRAME_SIZE_BYTES, PPU_REG_END, PPU_REG_START};
 use ppu_palette::*;
 use ppu_regs::*;
 
+pub const ROW_SIZE: u32 = 341;
+pub const NUM_ROWS: u32 = 262;
+pub const CYCLES_PER_FRAME: u32 = ROW_SIZE * NUM_ROWS;
 const PPU_CTRL: u16 = 0;
 const PPU_MASK: u16 = 1;
 const PPU_STATUS: u16 = 2;
@@ -18,9 +22,9 @@ const PPU_SCROLL: u16 = 5;
 const PPU_ADDR: u16 = 6;
 const PPU_DATA: u16 = 7;
 const PALETTE_RAM_SIZE: usize = 32;
-pub const ROW_SIZE: u32 = 341;
-pub const NUM_ROWS: u32 = 262;
-pub const CYCLES_PER_FRAME: u32 = ROW_SIZE * NUM_ROWS;
+const PRE_FETCH_START: u32 = 321;
+const PRE_FETCH_END: u32 = 336;
+const ATTR_TABLE_OFFSET: u32 = 0x3C0;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -45,14 +49,14 @@ pub struct Ppu {
     read_buf: u8,
     palette_ram: [u8; PALETTE_RAM_SIZE],
     nmi: bool,
-    bg_shift_0: u16,
-    bg_shift_1: u16,
-    at_shift_0: u16,
-    at_shift_1: u16,
-    nt_next: u8,
-    at_next: u8,
-    bg_next_0: u8,
-    bg_next_1: u8,
+    bg_shift_reg_0: u16,
+    bg_shift_reg_1: u16,
+    attr_latch_0: bool,
+    attr_latch_1: bool,
+    tile_num: u8,
+    attr_byte: u8,
+    bg_byte_0: u8,
+    bg_byte_1: u8,
     cycles: u32,
     frame_cycle: u32,
 }
@@ -66,16 +70,33 @@ impl Ppu {
     pub fn tick(&mut self, bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
 
-        if row < DISPLAY_HEIGHT || row == NUM_ROWS {
-            if (col >= 2 && col < 258) || (col >= 321 && col < 337) {
+        if row < DISPLAY_HEIGHT || row == NUM_ROWS - 1 {
+            if (col >= 2 && col <= DISPLAY_WIDTH)
+                || (col >= PRE_FETCH_START && col <= PRE_FETCH_END)
+            {
+                self.update_shift_regs();
+
                 match (col - 1) % 8 {
-                    0 => self.fetch_nt(),
-                    2 => self.fetch_at(),
-                    4 => self.fetch_bg_0(),
-                    6 => self.fetch_bg_1(),
+                    0 => {
+                        self.load_shift_regs();
+                        self.fetch_tile_num(bus);
+                    }
+                    2 => self.fetch_attr_byte(bus),
+                    4 => self.fetch_bg(bus, 0),
+                    6 => self.fetch_bg(bus, 1),
                     7 => self.inc_v_hor(),
                     _ => (),
                 };
+            };
+
+            if col == DISPLAY_WIDTH {
+                self.inc_v_ver();
+            }
+
+            if col == DISPLAY_WIDTH + 1 {
+                self.load_shift_regs();
+                self.v.set_coarse_x(self.t.coarse_x());
+                self.v.set_nx(self.t.nx());
             }
         }
 
@@ -84,6 +105,17 @@ impl Ppu {
         }
         if row == NUM_ROWS - 1 && col == 1 {
             self.status.set_v(0)
+        }
+
+        if row == NUM_ROWS - 1 && col >= 280 && col < 305
+		{
+			self.v.set_coarse_y(self.t.coarse_y());
+            self.v.set_fine_y(self.t.fine_y());
+            self.v.set_ny(self.t.ny());
+		}
+
+        if row < DISPLAY_HEIGHT && col < DISPLAY_WIDTH {
+            self.draw_pixel(frame, row, col);
         }
 
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
@@ -160,13 +192,49 @@ impl Ppu {
         self.nmi
     }
 
-    fn fetch_nt(&mut self) {}
+    fn fetch_tile_num(&mut self, bus: &mut impl PpuBus) {
+        self.tile_num = bus.ppu_read(NAMETABLE_0_START | self.v.nt_addr());
+    }
 
-    fn fetch_at(&mut self) {}
+    fn fetch_attr_byte(&mut self, bus: &mut impl PpuBus) {
+        let mut attr_addr = AttrAddr::default();
+        attr_addr.set_tile_group_x(self.v.coarse_x() >> 2);
+        attr_addr.set_tile_group_y(self.v.coarse_y() >> 2);
+        attr_addr.set_n(self.v.n());
+        self.attr_byte = bus.ppu_read(attr_addr.data());
+    }
 
-    fn fetch_bg_0(&mut self) {}
+    fn fetch_bg(&mut self, bus: &mut impl PpuBus, plane: u8) {
+        let mut pattern_addr = PatternAddr::default();
+        pattern_addr.set_fine_y(self.v.fine_y());
+        pattern_addr.set_p(plane as u16);
+        pattern_addr.set_tile(self.tile_num as u16);
+        pattern_addr.set_h(self.ctrl.b() as u16);
 
-    fn fetch_bg_1(&mut self) {}
+        if plane == 0 {
+            self.bg_byte_0 = bus.ppu_read(pattern_addr.data);
+        } else if plane == 1 {
+            self.bg_byte_1 = bus.ppu_read(pattern_addr.data);
+        } else {
+            panic!("Invalid plane.")
+        };
+    }
+
+    fn update_shift_regs(&mut self) {
+        self.bg_shift_reg_0 <<= 1;
+        self.bg_shift_reg_1 <<= 1;
+    }
+
+    fn load_shift_regs(&mut self) {
+        load_shift_reg(&mut self.bg_shift_reg_0, self.bg_byte_0);
+        load_shift_reg(&mut self.bg_shift_reg_1, self.bg_byte_1);
+
+        let tile_group_right = (self.v.coarse_x() % 4 > 1) as u8;
+        let tile_group_bottom = (self.v.coarse_y() % 4 > 1) as u8;
+        let attr = self.attr_byte >> (tile_group_right | (tile_group_bottom << 1));
+        self.attr_latch_0 = field!(attr, 0, 1) == 1;
+        self.attr_latch_1 = field!(attr, 1, 1) == 1;
+    }
 
     fn inc_v_hor(&mut self) {
         let mut coarse_x = self.v.coarse_x();
@@ -207,6 +275,20 @@ impl Ppu {
         self.v.set_ny(ny);
     }
 
+    fn draw_pixel(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES], row: u32, col: u32) {
+        let frame_idx = ((row * DISPLAY_WIDTH + col) * 3) as usize;
+
+        let mut palette_addr = PaletteAddr::default();
+        palette_addr.set_p0((self.bg_shift_reg_0 << self.x) >> 15);
+        palette_addr.set_p1((self.bg_shift_reg_1 << self.x) >> 15);
+        palette_addr.set_a0(self.attr_latch_0 as u16);
+        palette_addr.set_a1(self.attr_latch_1 as u16);
+
+        let color = self.get_color(palette_addr.data as u8);
+
+        Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = color;
+    }
+
     fn get_color(&self, palette_ram_addr: u8) -> Rgb {
         let mut addr = palette_ram_addr as usize % PALETTE_RAM_SIZE;
 
@@ -216,4 +298,9 @@ impl Ppu {
 
         PPU_PALETTE[self.palette_ram[addr] as usize % PALETTE_SIZE]
     }
+}
+
+fn load_shift_reg(reg: &mut u16, val: u8) {
+    *reg &= 0xFF00;
+    *reg |= val as u16;
 }
