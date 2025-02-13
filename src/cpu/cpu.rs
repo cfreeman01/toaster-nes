@@ -687,7 +687,7 @@ impl Cpu {
 
     fn ldy(&mut self, val: u8) {
         self.y = val;
-        self.set_zn(self.x);
+        self.set_zn(self.y);
     }
 
     fn lsr(&mut self, val: u8) -> u8 {
