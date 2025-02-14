@@ -25,6 +25,7 @@ const PALETTE_RAM_SIZE: usize = 32;
 const PRE_FETCH_START: u32 = 321;
 const PRE_FETCH_END: u32 = 336;
 const ATTR_TABLE_OFFSET: u32 = 0x3C0;
+const PALETTE_START: u16 = 0x3F00;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -71,7 +72,7 @@ impl Ppu {
         let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
 
         if row < DISPLAY_HEIGHT || row == NUM_ROWS - 1 {
-            if (col >= 2 && col <= DISPLAY_WIDTH)
+            if (col >= 1 && col <= DISPLAY_WIDTH)
                 || (col >= PRE_FETCH_START && col <= PRE_FETCH_END)
             {
                 self.update_shift_regs();
@@ -93,7 +94,7 @@ impl Ppu {
                 self.inc_v_ver();
             }
 
-            if col == DISPLAY_WIDTH + 1 {
+            if col == DISPLAY_WIDTH + 1 && self.rendering_enabled() {
                 self.load_shift_regs();
                 self.v.set_coarse_x(self.t.coarse_x());
                 self.v.set_nx(self.t.nx());
@@ -107,15 +108,14 @@ impl Ppu {
             self.status.set_v(0)
         }
 
-        if row == NUM_ROWS - 1 && col >= 280 && col < 305
-		{
-			self.v.set_coarse_y(self.t.coarse_y());
+        if row == NUM_ROWS - 1 && self.rendering_enabled() {
+            self.v.set_coarse_y(self.t.coarse_y());
             self.v.set_fine_y(self.t.fine_y());
             self.v.set_ny(self.t.ny());
-		}
+        }
 
-        if row < DISPLAY_HEIGHT && col < DISPLAY_WIDTH {
-            self.draw_pixel(frame, row, col);
+        if row < DISPLAY_HEIGHT && (col - 1) < DISPLAY_WIDTH {
+            self.draw_pixel(frame, row, col - 1);
         }
 
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
@@ -132,10 +132,15 @@ impl Ppu {
                 val
             }
             PPU_DATA => {
-                let val = self.read_buf;
-                self.read_buf = bus.ppu_read(self.v.addr());
-                self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 };
-                val
+                if self.v.addr() >= PALETTE_START {
+                    self.read_buf = self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE];
+                    self.read_buf
+                } else {
+                    let val = self.read_buf;
+                    self.read_buf = bus.ppu_read(self.v.addr());
+                    self.v.data += if self.ctrl.i() == 1 { 32 } else { 1 };
+                    val
+                }
             }
             _ => 0x0,
         }
@@ -164,7 +169,6 @@ impl Ppu {
             PPU_ADDR => {
                 if !self.w {
                     self.t.set_addr_hi(field!(data, 0, 6) as u16);
-                    self.t.data &= 0x3FFF;
                     self.w = true;
                 } else {
                     self.t.set_addr_low(data as u16);
@@ -173,7 +177,7 @@ impl Ppu {
                 }
             }
             PPU_DATA => {
-                if self.v.addr() >= 0x3F00 {
+                if self.v.addr() >= PALETTE_START {
                     self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE] = data;
                 } else {
                     bus.ppu_write(self.v.addr(), data);
@@ -221,8 +225,10 @@ impl Ppu {
     }
 
     fn update_shift_regs(&mut self) {
-        self.bg_shift_reg_0 <<= 1;
-        self.bg_shift_reg_1 <<= 1;
+        if self.mask.b() == 1 {
+            self.bg_shift_reg_0 <<= 1;
+            self.bg_shift_reg_1 <<= 1;
+        }
     }
 
     fn load_shift_regs(&mut self) {
@@ -231,48 +237,53 @@ impl Ppu {
 
         let tile_group_right = (self.v.coarse_x() % 4 > 1) as u8;
         let tile_group_bottom = (self.v.coarse_y() % 4 > 1) as u8;
-        let attr = self.attr_byte >> (tile_group_right | (tile_group_bottom << 1));
+        let shift_amt = (tile_group_right | (tile_group_bottom << 1)) * 2;
+        let attr = self.attr_byte >> shift_amt;
         self.attr_latch_0 = field!(attr, 0, 1) == 1;
         self.attr_latch_1 = field!(attr, 1, 1) == 1;
     }
 
     fn inc_v_hor(&mut self) {
-        let mut coarse_x = self.v.coarse_x();
-        let mut nx = self.v.nx();
+        if self.rendering_enabled() {
+            let mut coarse_x = self.v.coarse_x();
+            let mut nx = self.v.nx();
 
-        if coarse_x == 31 {
-            coarse_x = 0;
-            nx = !nx;
-        } else {
-            coarse_x += 1;
+            if coarse_x == 31 {
+                coarse_x = 0;
+                nx = !nx;
+            } else {
+                coarse_x += 1;
+            }
+
+            self.v.set_coarse_x(coarse_x);
+            self.v.set_nx(nx);
         }
-
-        self.v.set_coarse_x(coarse_x);
-        self.v.set_nx(nx);
     }
 
     fn inc_v_ver(&mut self) {
-        let mut coarse_y = self.v.coarse_y();
-        let mut fine_y = self.v.fine_y();
-        let mut ny = self.v.ny();
+        if self.rendering_enabled() {
+            let mut coarse_y = self.v.coarse_y();
+            let mut fine_y = self.v.fine_y();
+            let mut ny = self.v.ny();
 
-        if (fine_y < 7) {
-            fine_y += 1;
-        } else {
-            fine_y = 0;
-            if coarse_y == 29 {
-                coarse_y = 0;
-                ny = !ny;
-            } else if coarse_y == 31 {
-                coarse_y = 0;
+            if (fine_y < 7) {
+                fine_y += 1;
             } else {
-                coarse_y += 1;
+                fine_y = 0;
+                if coarse_y == 29 {
+                    coarse_y = 0;
+                    ny = !ny;
+                } else if coarse_y == 31 {
+                    coarse_y = 0;
+                } else {
+                    coarse_y += 1;
+                }
             }
-        }
 
-        self.v.set_coarse_y(coarse_y);
-        self.v.set_fine_y(fine_y);
-        self.v.set_ny(ny);
+            self.v.set_coarse_y(coarse_y);
+            self.v.set_fine_y(fine_y);
+            self.v.set_ny(ny);
+        }
     }
 
     fn draw_pixel(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES], row: u32, col: u32) {
@@ -297,6 +308,10 @@ impl Ppu {
         };
 
         PPU_PALETTE[self.palette_ram[addr] as usize % PALETTE_SIZE]
+    }
+
+    fn rendering_enabled(&self) -> bool {
+        self.mask.s() == 1 || self.mask.b() == 1
     }
 }
 
