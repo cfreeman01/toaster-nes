@@ -52,8 +52,8 @@ pub struct Ppu {
     nmi: bool,
     bg_shift_reg_0: u16,
     bg_shift_reg_1: u16,
-    attr_latch_0: bool,
-    attr_latch_1: bool,
+    attr_shift_reg_0: u16,
+    attr_shift_reg_1: u16,
     tile_num: u8,
     attr_byte: u8,
     bg_byte_0: u8,
@@ -133,7 +133,7 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    self.read_buf = self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE];
+                    self.read_buf = self.palette_ram[get_palette_addr(self.v.addr())];
                     self.read_buf
                 } else {
                     let val = self.read_buf;
@@ -178,7 +178,7 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    self.palette_ram[self.v.addr() as usize % PALETTE_RAM_SIZE] = data;
+                    self.palette_ram[get_palette_addr(self.v.addr())] = data;
                 } else {
                     bus.ppu_write(self.v.addr(), data);
                 }
@@ -206,6 +206,11 @@ impl Ppu {
         attr_addr.set_tile_group_y(self.v.coarse_y() >> 2);
         attr_addr.set_n(self.v.n());
         self.attr_byte = bus.ppu_read(attr_addr.data());
+
+        let tile_group_right = (self.v.coarse_x() % 4 > 1) as u8;
+        let tile_group_bottom = (self.v.coarse_y() % 4 > 1) as u8;
+        let shift_amt = ((tile_group_bottom << 1) | tile_group_right) * 2;
+        self.attr_byte >>= shift_amt;
     }
 
     fn fetch_bg(&mut self, bus: &mut impl PpuBus, plane: u8) {
@@ -228,19 +233,30 @@ impl Ppu {
         if self.mask.b() == 1 {
             self.bg_shift_reg_0 <<= 1;
             self.bg_shift_reg_1 <<= 1;
+            self.attr_shift_reg_0 <<= 1;
+            self.attr_shift_reg_1 <<= 1;
         }
     }
 
     fn load_shift_regs(&mut self) {
         load_shift_reg(&mut self.bg_shift_reg_0, self.bg_byte_0);
         load_shift_reg(&mut self.bg_shift_reg_1, self.bg_byte_1);
-
-        let tile_group_right = (self.v.coarse_x() % 4 > 1) as u8;
-        let tile_group_bottom = (self.v.coarse_y() % 4 > 1) as u8;
-        let shift_amt = (tile_group_right | (tile_group_bottom << 1)) * 2;
-        let attr = self.attr_byte >> shift_amt;
-        self.attr_latch_0 = field!(attr, 0, 1) == 1;
-        self.attr_latch_1 = field!(attr, 1, 1) == 1;
+        load_shift_reg(
+            &mut self.attr_shift_reg_0,
+            if field!(self.attr_byte, 0, 1) == 1 {
+                0xFF
+            } else {
+                0x00
+            },
+        );
+        load_shift_reg(
+            &mut self.attr_shift_reg_1,
+            if field!(self.attr_byte, 1, 1) == 1 {
+                0xFF
+            } else {
+                0x00
+            },
+        );
     }
 
     fn inc_v_hor(&mut self) {
@@ -292,22 +308,16 @@ impl Ppu {
         let mut palette_addr = PaletteAddr::default();
         palette_addr.set_p0((self.bg_shift_reg_0 << self.x) >> 15);
         palette_addr.set_p1((self.bg_shift_reg_1 << self.x) >> 15);
-        palette_addr.set_a0(self.attr_latch_0 as u16);
-        palette_addr.set_a1(self.attr_latch_1 as u16);
+        palette_addr.set_a0((self.attr_shift_reg_0 << self.x) >> 15);
+        palette_addr.set_a1((self.attr_shift_reg_1 << self.x) >> 15);
 
         let color = self.get_color(palette_addr.data as u8);
 
         Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = color;
     }
 
-    fn get_color(&self, palette_ram_addr: u8) -> Rgb {
-        let mut addr = palette_ram_addr as usize % PALETTE_RAM_SIZE;
-
-        if addr % 4 == 0 {
-            addr = 0;
-        };
-
-        PPU_PALETTE[self.palette_ram[addr] as usize % PALETTE_SIZE]
+    fn get_color(&self, addr: u8) -> Rgb {
+        PPU_PALETTE[self.palette_ram[get_palette_addr(addr as u16)] as usize % PALETTE_SIZE]
     }
 
     fn rendering_enabled(&self) -> bool {
@@ -318,4 +328,14 @@ impl Ppu {
 fn load_shift_reg(reg: &mut u16, val: u8) {
     *reg &= 0xFF00;
     *reg |= val as u16;
+}
+
+fn get_palette_addr(addr: u16) -> usize{
+    let mut addr = addr as usize % PALETTE_RAM_SIZE;
+
+    if addr % 4 == 0 {
+        addr = 0;
+    };
+
+    addr
 }
