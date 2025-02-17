@@ -24,7 +24,7 @@ const PPU_DATA: u16 = 7;
 const PALETTE_RAM_SIZE: usize = 32;
 const PRE_FETCH_START: u32 = 321;
 const PRE_FETCH_END: u32 = 336;
-const ATTR_TABLE_OFFSET: u32 = 0x3C0;
+const ATTR_TABLE_OFFSET: u32 = 0x23C0;
 const PALETTE_START: u16 = 0x3F00;
 
 macro_rules! field {
@@ -202,8 +202,8 @@ impl Ppu {
 
     fn fetch_attr_byte(&mut self, bus: &mut impl PpuBus) {
         let mut attr_addr = AttrAddr::default();
-        attr_addr.set_tile_group_x(self.v.coarse_x() >> 2);
-        attr_addr.set_tile_group_y(self.v.coarse_y() >> 2);
+        attr_addr.set_tile_group_x(self.v.coarse_x() / 4);
+        attr_addr.set_tile_group_y(self.v.coarse_y() / 4);
         attr_addr.set_n(self.v.n());
         self.attr_byte = bus.ppu_read(attr_addr.data());
 
@@ -311,13 +311,10 @@ impl Ppu {
         palette_addr.set_a0((self.attr_shift_reg_0 << self.x) >> 15);
         palette_addr.set_a1((self.attr_shift_reg_1 << self.x) >> 15);
 
-        let color = self.get_color(palette_addr.data as u8);
+        let color = PPU_PALETTE
+            [self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE];
 
         Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = color;
-    }
-
-    fn get_color(&self, addr: u8) -> Rgb {
-        PPU_PALETTE[self.palette_ram[get_palette_addr(addr as u16)] as usize % PALETTE_SIZE]
     }
 
     fn rendering_enabled(&self) -> bool {
@@ -330,7 +327,7 @@ fn load_shift_reg(reg: &mut u16, val: u8) {
     *reg |= val as u16;
 }
 
-fn get_palette_addr(addr: u16) -> usize{
+fn get_palette_addr(addr: u16) -> usize {
     let mut addr = addr as usize % PALETTE_RAM_SIZE;
 
     if addr % 4 == 0 {
