@@ -706,6 +706,7 @@ impl Cpu {
 
     fn pla(&mut self, val: u8) {
         self.a = val;
+        self.set_zn(self.a);
     }
 
     fn plp(&mut self, val: u8) {
