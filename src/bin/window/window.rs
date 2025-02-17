@@ -1,6 +1,7 @@
 use core::str;
 use gl::{types::*, VERTEX_SHADER};
-use glfw::{Action, Context, Glfw, GlfwReceiver, Key, PWindow, WindowEvent};
+pub use glfw::{Action, Key};
+use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use std::{
     ffi::{c_void, CString},
     ptr,
@@ -17,7 +18,7 @@ pub struct Window {
     texture: u32,
 }
 
-const VERTEX_SHADER_SRC: &str = &"#version 330 core
+const VERTEX_SHADER_SRC: &str = "#version 330 core
 
 out vec2 texCoords;
 
@@ -44,7 +45,7 @@ void main() {
     texCoords = texCoordsArr[gl_VertexID];
 }";
 
-const FRAG_SHADER_SRC: &str = &"#version 330 core
+const FRAG_SHADER_SRC: &str = "#version 330 core
 
 uniform sampler2D texSampler;
 
@@ -115,14 +116,18 @@ impl Window {
 
     pub fn poll_events(&mut self) {
         self.glfw.poll_events();
+    }
+
+    pub fn get_key_events(&mut self) -> Vec<(Key, bool)> {
+        let mut events = vec![];
+
         for (_, event) in glfw::flush_messages(&self.events) {
-            match event {
-                glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
-                    self.window.set_should_close(true)
-                }
-                _ => (),
+            if let glfw::WindowEvent::Key(key, _, action, _) = event {
+                events.push((key, action != Action::Release))
             }
         }
+
+        events
     }
 
     pub fn closed(&self) -> bool {
@@ -148,11 +153,9 @@ impl Window {
             gl::GenerateMipmap(gl::TEXTURE_2D);
 
             gl::DrawArrays(gl::TRIANGLES, 0, 6);
-        }
 
-        self.window.swap_buffers();
+            self.window.swap_buffers();
 
-        unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         }
     }

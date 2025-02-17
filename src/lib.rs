@@ -13,7 +13,12 @@ mod ppu;
 #[path = "cartridge/cartridge.rs"]
 mod cartridge;
 
+#[path = "controller/controller.rs"]
+mod controller;
+
 use cartridge::{cart_init, Cartridge};
+pub use controller::Button;
+use controller::Controller;
 use cpu::{Cpu, CpuBus};
 use ppu::{Ppu, PpuBus};
 use rom::Rom;
@@ -30,20 +35,23 @@ const PPU_CART_START: u16 = 0x0000;
 const PPU_CART_END: u16 = 0x3EFF;
 const PPU_REG_START: u16 = 0x2000;
 const PPU_REG_END: u16 = 0x3FFF;
+const BUTTON_REG: u16 = 0x4016;
 
 pub struct Nes {
     cpu: Cpu,
     ppu: Ppu,
     ram: [u8; RAM_SIZE],
     cartridge: Box<dyn Cartridge>,
+    controller: Controller,
 }
 
 macro_rules! cpu_bus {
-    ($ram:expr, $ppu:expr, $cart:expr) => {
+    ($ram:expr, $ppu:expr, $cart:expr, $cont:expr) => {
         &mut NesCpuBus {
             ram: &mut $ram,
             ppu: &mut $ppu,
             cartridge: &mut $cart,
+            controller: &mut $cont,
         }
     };
 }
@@ -63,10 +71,12 @@ impl Nes {
             ppu: Ppu::default(),
             ram: [0xff; RAM_SIZE],
             cartridge: cart_init(rom),
+            controller: Controller::default(),
         };
 
         nes.cpu.reset = true;
-        nes.cpu.step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge));
+        nes.cpu
+            .step(cpu_bus!(nes.ram, nes.ppu, *nes.cartridge, nes.controller));
         nes.cpu.reset = false;
 
         nes
@@ -78,13 +88,26 @@ impl Nes {
         }
     }
 
+    pub fn set_button_state(&mut self, button: Button, pressed: bool) {
+        self.controller.set_button_state(button, pressed);
+    }
+
     fn tick(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         self.ppu.tick(ppu_bus!(*self.cartridge), frame);
 
         self.cpu.nmi = self.ppu.nmi();
 
         if self.ppu.cycles() % 3 == 0 {
-            self.cpu.tick(cpu_bus!(self.ram, self.ppu, *self.cartridge));
+            self.cpu.tick(cpu_bus!(
+                self.ram,
+                self.ppu,
+                *self.cartridge,
+                self.controller
+            ));
+
+            if self.controller.strobe {
+                self.controller.latch_buttons();
+            }
         }
     }
 }
@@ -93,6 +116,7 @@ struct NesCpuBus<'a> {
     ram: &'a mut [u8; RAM_SIZE],
     ppu: &'a mut Ppu,
     cartridge: &'a mut dyn Cartridge,
+    controller: &'a mut Controller,
 }
 
 impl CpuBus for NesCpuBus<'_> {
@@ -101,6 +125,7 @@ impl CpuBus for NesCpuBus<'_> {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
             PPU_REG_START..=PPU_REG_END => self.ppu.cpu_read(addr, ppu_bus!(*self.cartridge)),
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr),
+            BUTTON_REG => self.controller.read(),
             _ => 0x00,
         }
     }
@@ -112,6 +137,7 @@ impl CpuBus for NesCpuBus<'_> {
                 self.ppu.cpu_write(addr, data, ppu_bus!(*self.cartridge))
             }
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_write(addr, data),
+            BUTTON_REG => self.controller.strobe = ((data & 0x1) == 1),
             _ => (),
         };
     }

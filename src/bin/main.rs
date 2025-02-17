@@ -1,14 +1,31 @@
 #[path = "window/window.rs"]
 pub mod window;
 
-use std::env;
-use std::fs;
+use lazy_static::lazy_static;
+use std::collections::HashMap;
+use std::{env, fs};
 use toaster_nes::rom::{rom_get_info, rom_parse};
 use toaster_nes::*;
-use window::Window;
+use window::*;
 
 const WINDOW_TITLE: &str = "ToasterNES";
 const WINDOW_SCALE: u32 = 3;
+
+lazy_static! {
+    static ref KEY_BINDS: HashMap<Key, Button> = [
+        (Key::W, Button::Up),
+        (Key::A, Button::Left),
+        (Key::S, Button::Down),
+        (Key::D, Button::Right),
+        (Key::Q, Button::Select),
+        (Key::E, Button::Start),
+        (Key::L, Button::A),
+        (Key::K, Button::B)
+    ]
+    .iter()
+    .cloned()
+    .collect();
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -28,6 +45,13 @@ fn main() {
         nes.frame(&mut frame);
 
         window.poll_events();
+
+        for (key, pressed) in window.get_key_events() {
+            if let Some(&button) = KEY_BINDS.get(&key) {
+                nes.set_button_state(button, pressed)
+            }
+        }
+
         window.render(&frame);
     }
 }
