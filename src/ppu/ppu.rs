@@ -178,6 +178,9 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
+                    if vec![0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)){
+                        return;
+                    }
                     self.palette_ram[get_palette_addr(self.v.addr())] = data;
                 } else {
                     bus.ppu_write(self.v.addr(), data);

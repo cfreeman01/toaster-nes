@@ -16,8 +16,8 @@ mod cartridge;
 #[path = "controller/controller.rs"]
 mod controller;
 
-use cartridge::{cart_init, Cartridge};
 pub use controller::Button;
+use cartridge::{cart_init, Cartridge};
 use controller::Controller;
 use cpu::{Cpu, CpuBus};
 use ppu::{Ppu, PpuBus};
