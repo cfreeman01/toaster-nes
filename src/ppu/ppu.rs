@@ -161,7 +161,6 @@ impl Ppu {
                 self.w = false;
                 val
             }
-            OAM_ADDR => self.oam_addr,
             OAM_DATA => self.oam[self.oam_addr as usize],
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {

@@ -46,6 +46,8 @@ pub struct Nes {
     controller: Controller,
     dma_flag: bool,
     dma_addr: u16,
+    dma_data: u8,
+    dma_write_toggle: bool,
 }
 
 macro_rules! cpu_bus {
@@ -79,6 +81,8 @@ impl Nes {
             controller: Controller::default(),
             dma_flag: false,
             dma_addr: 0,
+            dma_data: 0,
+            dma_write_toggle: false,
         };
 
         nes.cpu.reset = true;
@@ -104,12 +108,36 @@ impl Nes {
         self.cpu.nmi = self.ppu.nmi();
 
         if self.ppu.cycles() % 3 == 0 {
-            self.cpu.tick(cpu_bus!(self));
+            if !self.dma_flag {
+                self.cpu.tick(cpu_bus!(self));
+            } else {
+                self.dma_tick();
+            }
 
             if self.controller.strobe {
                 self.controller.latch_buttons();
             }
         }
+    }
+
+    fn dma_tick(&mut self) {
+        if !self.dma_write_toggle {
+            let dma_addr = self.dma_addr;
+            self.dma_data = cpu_bus!(self).cpu_read(dma_addr);
+            self.dma_addr += 1;
+        } else {
+            self.ppu.cpu_write(
+                PPU_REG_START + OAM_DATA,
+                self.dma_data,
+                ppu_bus!(*self.cartridge),
+            );
+
+            if self.dma_addr & 0x00FF == 0 {
+                self.dma_flag = false;
+            }
+        }
+
+        self.dma_write_toggle = !self.dma_write_toggle;
     }
 }
 
