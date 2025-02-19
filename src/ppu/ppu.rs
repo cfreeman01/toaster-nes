@@ -16,8 +16,8 @@ pub const CYCLES_PER_FRAME: u32 = ROW_SIZE * NUM_ROWS;
 const PPU_CTRL: u16 = 0;
 const PPU_MASK: u16 = 1;
 const PPU_STATUS: u16 = 2;
-const OAM_ADDR: u16 = 3;
-const OAM_DATA: u16 = 4;
+pub const OAM_ADDR: u16 = 3;
+pub const OAM_DATA: u16 = 4;
 const PPU_SCROLL: u16 = 5;
 const PPU_ADDR: u16 = 6;
 const PPU_DATA: u16 = 7;
@@ -26,6 +26,7 @@ const PRE_FETCH_START: u32 = 321;
 const PRE_FETCH_END: u32 = 336;
 const ATTR_TABLE_OFFSET: u32 = 0x23C0;
 const PALETTE_START: u16 = 0x3F00;
+pub const OAM_SIZE: usize = 256;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -37,8 +38,6 @@ macro_rules! field {
         ($val >> $pos) & mask
     }};
 }
-
-#[derive(Default)]
 pub struct Ppu {
     ctrl: PpuCtrl,
     mask: PpuMask,
@@ -58,8 +57,39 @@ pub struct Ppu {
     attr_byte: u8,
     bg_byte_0: u8,
     bg_byte_1: u8,
+    oam: [u8; OAM_SIZE],
+    oam_addr: u8,
     cycles: u32,
     frame_cycle: u32,
+}
+
+impl Default for Ppu {
+    fn default() -> Self {
+        Self {
+            ctrl: Default::default(),
+            mask: Default::default(),
+            status: Default::default(),
+            v: Default::default(),
+            t: Default::default(),
+            w: Default::default(),
+            x: Default::default(),
+            read_buf: Default::default(),
+            palette_ram: Default::default(),
+            nmi: Default::default(),
+            bg_shift_reg_0: Default::default(),
+            bg_shift_reg_1: Default::default(),
+            attr_shift_reg_0: Default::default(),
+            attr_shift_reg_1: Default::default(),
+            tile_num: Default::default(),
+            attr_byte: Default::default(),
+            bg_byte_0: Default::default(),
+            bg_byte_1: Default::default(),
+            oam: [0xff; OAM_SIZE],
+            oam_addr: Default::default(),
+            cycles: Default::default(),
+            frame_cycle: Default::default(),
+        }
+    }
 }
 
 pub trait PpuBus {
@@ -131,6 +161,8 @@ impl Ppu {
                 self.w = false;
                 val
             }
+            OAM_ADDR => self.oam_addr,
+            OAM_DATA => self.oam[self.oam_addr as usize],
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
                     self.read_buf = self.palette_ram[get_palette_addr(self.v.addr())];
@@ -155,6 +187,13 @@ impl Ppu {
             PPU_MASK => {
                 self.mask.data = data;
             }
+            OAM_ADDR => {
+                self.oam_addr = data;
+            }
+            OAM_DATA => {
+                self.oam[self.oam_addr as usize] = data;
+                self.oam_addr += 1;
+            }
             PPU_SCROLL => {
                 if !self.w {
                     self.x = field!(data, 0, 3);
@@ -178,7 +217,7 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    if vec![0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)){
+                    if vec![0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)) {
                         return;
                     }
                     self.palette_ram[get_palette_addr(self.v.addr())] = data;
