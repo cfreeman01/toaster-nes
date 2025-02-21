@@ -27,6 +27,9 @@ const PRE_FETCH_END: u32 = 336;
 const ATTR_TABLE_OFFSET: u32 = 0x23C0;
 const PALETTE_START: u16 = 0x3F00;
 pub const OAM_SIZE: usize = 256;
+const OAM2_SIZE: usize = 32;
+const SPRITE_EVAL: u32 = 65;
+const SPIRTES_PER_ROW: usize = 8;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -58,6 +61,7 @@ pub struct Ppu {
     bg_byte_0: u8,
     bg_byte_1: u8,
     oam: [u8; OAM_SIZE],
+    oam2: [u8; OAM2_SIZE],
     oam_addr: u8,
     cycles: u32,
     frame_cycle: u32,
@@ -85,6 +89,7 @@ impl Default for Ppu {
             bg_byte_0: Default::default(),
             bg_byte_1: Default::default(),
             oam: [0xff; OAM_SIZE],
+            oam2: [0xff; OAM2_SIZE],
             oam_addr: Default::default(),
             cycles: Default::default(),
             frame_cycle: Default::default(),
@@ -129,13 +134,19 @@ impl Ppu {
                 self.v.set_coarse_x(self.t.coarse_x());
                 self.v.set_nx(self.t.nx());
             }
+
+            if row < DISPLAY_HEIGHT && col == SPRITE_EVAL {
+                self.sprite_eval();
+            }
         }
 
         if row == DISPLAY_HEIGHT + 1 && col == 1 {
             self.status.set_v(1)
         }
         if row == NUM_ROWS - 1 && col == 1 {
-            self.status.set_v(0)
+            self.status.set_v(0);
+            self.status.set_s(0);
+            self.status.set_o(0);
         }
 
         if row == NUM_ROWS - 1 && self.rendering_enabled() {
@@ -216,7 +227,7 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    if vec![0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)) {
+                    if [0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)) {
                         return;
                     }
                     self.palette_ram[get_palette_addr(self.v.addr())] = data;
@@ -360,6 +371,31 @@ impl Ppu {
 
     fn rendering_enabled(&self) -> bool {
         self.mask.s() == 1 || self.mask.b() == 1
+    }
+
+    fn sprite_eval(&mut self) {
+        let mut oam_idx = 0;
+        let mut sprites_found = 0;
+        let row = ((self.frame_cycle / ROW_SIZE) + 1) % DISPLAY_HEIGHT;
+        self.oam2.fill(0xFF);
+
+        while oam_idx < OAM_SIZE {
+            let sprite_y = self.oam[oam_idx] as u32;
+
+            if (0..8).contains(&(row - sprite_y)) && sprites_found < SPIRTES_PER_ROW {
+                let oam2_idx = sprites_found * 4;
+                self.oam2[oam2_idx] = self.oam[oam_idx];
+                self.oam2[oam2_idx + 1] = self.oam[oam_idx + 1];
+                self.oam2[oam2_idx + 2] = self.oam[oam_idx + 2];
+                self.oam2[oam2_idx + 3] = self.oam[oam_idx + 3];
+                sprites_found += 1;
+            } else if sprites_found == SPIRTES_PER_ROW {
+                self.status.set_o(1);
+                break;
+            }
+
+            oam_idx += 4;
+        }
     }
 }
 
