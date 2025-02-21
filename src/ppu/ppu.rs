@@ -156,7 +156,12 @@ impl Ppu {
         }
 
         if row < DISPLAY_HEIGHT && (col - 1) < DISPLAY_WIDTH {
-            self.draw_pixel(frame, row, col - 1);
+            let priority = self.get_priority();
+            if priority == -1 {
+                self.draw_bg_pixel(frame, row, col - 1);
+            } else {
+                self.draw_sprite_pixel(frame, row, col - 1, priority as u32);
+            }
         }
 
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
@@ -354,7 +359,7 @@ impl Ppu {
         }
     }
 
-    fn draw_pixel(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES], row: u32, col: u32) {
+    fn draw_bg_pixel(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES], row: u32, col: u32) {
         let frame_idx = ((row * DISPLAY_WIDTH + col) * 3) as usize;
 
         let mut palette_addr = PaletteAddr::default();
@@ -367,6 +372,17 @@ impl Ppu {
             [self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE];
 
         Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = color;
+    }
+
+    fn draw_sprite_pixel(
+        &mut self,
+        frame: &mut [u8; FRAME_SIZE_BYTES],
+        row: u32,
+        col: u32,
+        sprite_num: u32,
+    ) {
+        let frame_idx = ((row * DISPLAY_WIDTH + col) * 3) as usize;
+        Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = Rgb(100, 100, 100);
     }
 
     fn rendering_enabled(&self) -> bool {
@@ -395,6 +411,35 @@ impl Ppu {
             }
 
             oam_idx += 4;
+        }
+    }
+
+    fn get_priority(&mut self) -> i32 {
+        let mut oam2_idx = 0;
+        let mut sprite_found = false;
+        let mut sprite_attr = SpriteAttr::default();
+        let col = self.frame_cycle % ROW_SIZE;
+
+        while oam2_idx < OAM2_SIZE {
+            let sprite_x = self.oam2[oam2_idx + 3] as u32;
+
+            if (0..8).contains(&(col - sprite_x)) {
+                sprite_attr.data = self.oam2[oam2_idx + 2];
+
+                if sprite_attr.priority() == 0 {
+                    sprite_found = true;
+                }
+
+                break;
+            }
+
+            oam2_idx += 4;
+        }
+
+        if sprite_found {
+            (oam2_idx / 4) as i32
+        } else {
+            -1
         }
     }
 }
