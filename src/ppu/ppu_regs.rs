@@ -136,6 +136,8 @@ pub struct SpriteAttr {
 
 impl SpriteAttr {
     get_set_field!(palette, set_palette, 0, 2, u8);
+    get_set_field!(palette0, set_palette0, 0, 1, u8);
+    get_set_field!(palette1, set_palette1, 1, 1, u8);
     get_set_field!(priority, set_priority, 5, 1, u8);
     get_set_field!(flip_hor, set_flip_hor, 6, 1, u8);
     get_set_field!(flip_ver, set_flip_ver, 7, 1, u8);
