@@ -26,7 +26,7 @@ macro_rules! get_set_field {
     };
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct VramAddr {
     pub data: u16,
 }
@@ -44,7 +44,7 @@ impl VramAddr {
     get_set_field!(nt_addr, set_nt_addr, 0, 12, u16);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct PpuCtrl {
     pub data: u8,
 }
@@ -61,7 +61,7 @@ impl PpuCtrl {
     get_set_field!(v, set_v, 7, 1, u8);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct PpuMask {
     pub data: u8,
 }
@@ -71,7 +71,7 @@ impl PpuMask {
     get_set_field!(s, set_s, 4, 1, u8);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct PpuStatus {
     pub data: u8,
 }
@@ -104,7 +104,7 @@ impl AttrAddr {
     get_set_field!(n, set_n, 10, 2, u16);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct PatternAddr {
     pub data: u16,
 }
@@ -116,7 +116,7 @@ impl PatternAddr {
     get_set_field!(h, set_h, 12, 1, u16);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct PaletteAddr {
     pub data: u16,
 }
@@ -129,7 +129,7 @@ impl PaletteAddr {
     get_set_field!(s, set_s, 4, 1, u16);
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone, Default)]
 pub struct SpriteAttr {
     pub data: u8,
 }

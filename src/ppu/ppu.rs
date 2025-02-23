@@ -27,8 +27,7 @@ const PRE_FETCH_END: u32 = 336;
 const ATTR_TABLE_OFFSET: u32 = 0x23C0;
 const PALETTE_START: u16 = 0x3F00;
 pub const OAM_SIZE: usize = 256;
-const OAM2_SIZE: usize = 32;
-const SPIRTES_PER_ROW: usize = 8;
+const SPRITES_PER_ROW: usize = 8;
 
 macro_rules! field {
     ($val:expr, $pos:expr, $width:expr) => {{
@@ -39,6 +38,27 @@ macro_rules! field {
         }
         ($val >> $pos) & mask
     }};
+}
+
+#[derive(Copy, Clone)]
+struct SpriteInfo {
+    x_pos: u8,
+    y_pos: u8,
+    pattern_0: u8,
+    pattern_1: u8,
+    attr: SpriteAttr,
+}
+
+impl Default for SpriteInfo {
+    fn default() -> Self {
+        Self {
+            x_pos: 0xFF,
+            y_pos: 0xFF,
+            pattern_0: 0xFF,
+            pattern_1: 0xFF,
+            attr: SpriteAttr { data: 0xff },
+        }
+    }
 }
 pub struct Ppu {
     ctrl: PpuCtrl,
@@ -60,7 +80,7 @@ pub struct Ppu {
     bg_byte_0: u8,
     bg_byte_1: u8,
     oam: [u8; OAM_SIZE],
-    oam2: [u8; OAM2_SIZE],
+    sprites: [SpriteInfo; SPRITES_PER_ROW],
     oam_addr: u8,
     cycles: u32,
     frame_cycle: u32,
@@ -87,8 +107,8 @@ impl Default for Ppu {
             attr_byte: Default::default(),
             bg_byte_0: Default::default(),
             bg_byte_1: Default::default(),
-            oam: [0xff; OAM_SIZE],
-            oam2: [0xff; OAM2_SIZE],
+            oam: [0xFF; OAM_SIZE],
+            sprites: [SpriteInfo::default(); SPRITES_PER_ROW],
             oam_addr: Default::default(),
             cycles: Default::default(),
             frame_cycle: Default::default(),
@@ -135,8 +155,12 @@ impl Ppu {
             }
         }
 
-        if row < DISPLAY_HEIGHT && col == DISPLAY_WIDTH + 1 {
-            self.sprite_eval();
+        if col == DISPLAY_WIDTH + 1 {
+            self.sprites.fill(SpriteInfo::default());
+
+            if row < DISPLAY_HEIGHT {
+                self.sprite_eval(row, bus);
+            }
         }
 
         if row == DISPLAY_HEIGHT + 1 && col == 1 {
@@ -155,13 +179,7 @@ impl Ppu {
         }
 
         if row < DISPLAY_HEIGHT && (col - 1) < DISPLAY_WIDTH {
-            let frame_idx = ((row * DISPLAY_WIDTH + (col - 1)) * 3) as usize;
-            Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) =
-                if let Some(pixel) = self.get_sprite_pixel(bus, row, col - 1) {
-                    pixel
-                } else {
-                    self.get_bg_pixel()
-                }
+            self.draw_pixel(col - 1, row, frame)
         }
 
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
@@ -285,16 +303,6 @@ impl Ppu {
         };
     }
 
-    fn fetch_sprite_pattern(&mut self, bus: &mut impl PpuBus, plane: u8, fine_y: u32, tile_num: u8) -> u8 {
-        let mut pattern_addr = PatternAddr::default();
-        pattern_addr.set_fine_y(fine_y as u16);
-        pattern_addr.set_p(plane as u16);
-        pattern_addr.set_tile(tile_num as u16);
-        pattern_addr.set_h(self.ctrl.s() as u16);
-
-        bus.ppu_read(pattern_addr.data)
-    }
-
     fn update_shift_regs(&mut self) {
         if self.mask.b() == 1 {
             self.bg_shift_reg_0 <<= 1;
@@ -368,6 +376,17 @@ impl Ppu {
         }
     }
 
+    fn draw_pixel(&mut self, x: u32, y: u32, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        let frame_idx = ((y * DISPLAY_WIDTH + x) * 3) as usize;
+
+        Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) =
+            if let Some(sprite_pixel) = self.get_sprite_pixel(x) {
+                sprite_pixel
+            } else {
+                self.get_bg_pixel()
+            }
+    }
+
     fn get_bg_pixel(&mut self) -> Rgb {
         let mut palette_addr = PaletteAddr::default();
         palette_addr.set_p0((self.bg_shift_reg_0 << self.x) >> 15);
@@ -375,80 +394,74 @@ impl Ppu {
         palette_addr.set_a0((self.attr_shift_reg_0 << self.x) >> 15);
         palette_addr.set_a1((self.attr_shift_reg_1 << self.x) >> 15);
 
-        PPU_PALETTE[self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE]
+        self.get_color(palette_addr)
     }
 
-    fn get_sprite_pixel(&mut self, bus: &mut impl PpuBus, row: u32, col: u32) -> Option<Rgb> {
-        if row == 0{
-            return None;
-        }
-        let row = row - 1;
-        let mut oam2_idx = 0;
-        let mut sprite_in_front = false;
-        let mut sprite_y = 0;
-        let mut sprite_tilenum = 0;
-        let mut sprite_attr = SpriteAttr::default();
-        let mut sprite_x = 0;
-        let mut sprite_pattern_0 = 0;
-        let mut sprite_pattern_1 = 0;
+    fn get_sprite_pixel(&mut self, x: u32) -> Option<Rgb> {
+        for sprite in self.sprites {
+            let fine_x = x - sprite.x_pos as u32;
+            let pattern_0 = sprite.pattern_0 >> (7 - fine_x);
+            let pattern_1 = sprite.pattern_1 >> (7 - fine_x);
 
-        while oam2_idx < OAM2_SIZE {
-            sprite_y = self.oam2[oam2_idx] as u32;
-            sprite_tilenum = self.oam2[oam2_idx + 1];
-            sprite_attr.data = self.oam2[oam2_idx + 2];
-            sprite_x = self.oam2[oam2_idx + 3] as u32;
-
-            if (0..8).contains(&(col - sprite_x)) {
-                sprite_pattern_0 = self.fetch_sprite_pattern(bus, 0, row - sprite_y, sprite_tilenum) >> (7 - (col - sprite_x));
-                sprite_pattern_1 = self.fetch_sprite_pattern(bus, 1, row - sprite_y, sprite_tilenum) >> (7 - (col - sprite_x));
-
-                if (sprite_attr.priority() == 0) && ((sprite_pattern_0 | sprite_pattern_1) & 0x1 != 0)
-                {
-                    sprite_in_front = true;
+            if (0..8).contains(&fine_x) && ((pattern_0 | pattern_1) & 0x1 != 0) {
+                if sprite.attr.priority() == 0 {
+                    let mut palette_addr = PaletteAddr::default();
+                    palette_addr.set_p0(pattern_0 as u16);
+                    palette_addr.set_p1(pattern_1 as u16);
+                    palette_addr.set_a0(sprite.attr.palette0() as u16);
+                    palette_addr.set_a1(sprite.attr.palette1() as u16);
+                    palette_addr.set_s(1);
+                    return Some(self.get_color(palette_addr));
                 }
-
                 break;
             }
-
-            oam2_idx += 4;
         }
 
-        if sprite_in_front {
-            let mut palette_addr = PaletteAddr::default();
-            palette_addr.set_p0(sprite_pattern_0 as u16);
-            palette_addr.set_p1(sprite_pattern_1 as u16);
-            palette_addr.set_a0(sprite_attr.palette0() as u16);
-            palette_addr.set_a1(sprite_attr.palette1() as u16);
-            palette_addr.set_s(1);
-            Some(PPU_PALETTE[self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE])
-        } else {
-            None
-        }
+        None
     }
 
-    fn sprite_eval(&mut self) {
+    fn sprite_eval(&mut self, row: u32, bus: &mut impl PpuBus) {
         let mut oam_idx = 0;
         let mut sprites_found = 0;
-        let row = self.frame_cycle / ROW_SIZE;
-        self.oam2.fill(0xFF);
 
         while oam_idx < OAM_SIZE {
             let sprite_y = self.oam[oam_idx] as u32;
 
-            if (0..8).contains(&(row - sprite_y)) && sprites_found < SPIRTES_PER_ROW {
-                let oam2_idx = sprites_found * 4;
-                self.oam2[oam2_idx] = self.oam[oam_idx];
-                self.oam2[oam2_idx + 1] = self.oam[oam_idx + 1];
-                self.oam2[oam2_idx + 2] = self.oam[oam_idx + 2];
-                self.oam2[oam2_idx + 3] = self.oam[oam_idx + 3];
-                sprites_found += 1;
-            } else if sprites_found == SPIRTES_PER_ROW {
-                self.status.set_o(1);
-                break;
+            if (0..8).contains(&(row - sprite_y)) {
+                if sprites_found < SPRITES_PER_ROW {
+                    let mut fetch_pattern = |plane| -> u8 {
+                        let mut pattern_addr = PatternAddr::default();
+                        pattern_addr.set_fine_y((row - sprite_y) as u16);
+                        pattern_addr.set_p(plane as u16);
+                        pattern_addr.set_tile(self.oam[oam_idx + 1] as u16);
+                        pattern_addr.set_h(self.ctrl.s() as u16);
+
+                        bus.ppu_read(pattern_addr.data)
+                    };
+
+                    self.sprites[sprites_found] = SpriteInfo {
+                        x_pos: self.oam[oam_idx + 3],
+                        y_pos: self.oam[oam_idx],
+                        pattern_0: fetch_pattern(0),
+                        pattern_1: fetch_pattern(1),
+                        attr: SpriteAttr {
+                            data: self.oam[oam_idx + 2],
+                        },
+                    };
+
+                    sprites_found += 1;
+                } else {
+                    self.status.set_o(1);
+                    break;
+                }
             }
 
             oam_idx += 4;
         }
+    }
+
+    fn get_color(&self, palette_addr: PaletteAddr) -> Rgb {
+        PPU_PALETTE[self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE]
     }
 
     fn rendering_enabled(&self) -> bool {
