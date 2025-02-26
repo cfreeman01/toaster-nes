@@ -3,13 +3,14 @@ pub mod window;
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::{env, fs};
+use std::{env, fs, time::{Instant, Duration}, thread};
 use toaster_nes::rom::{rom_get_info, rom_parse};
 use toaster_nes::*;
 use window::*;
 
 const WINDOW_TITLE: &str = "ToasterNES";
 const WINDOW_SCALE: u32 = 3;
+const FRAME_TIME_US: u64 = 16666;
 
 lazy_static! {
     static ref KEY_BINDS: HashMap<Key, Button> = [
@@ -42,6 +43,8 @@ fn main() {
     let mut frame = [0; FRAME_SIZE_BYTES];
 
     while !window.closed() {
+        let time = Instant::now();
+
         nes.frame(&mut frame);
 
         window.poll_events();
@@ -51,6 +54,10 @@ fn main() {
                 nes.set_button_state(button, pressed)
             }
         }
+
+        let duration = time.elapsed().as_micros() as u64;
+
+        thread::sleep(Duration::from_micros(FRAME_TIME_US - duration));
 
         window.render(&frame);
     }

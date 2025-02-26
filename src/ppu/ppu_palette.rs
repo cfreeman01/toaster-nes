@@ -1,6 +1,6 @@
 pub const PALETTE_SIZE: usize = 64;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Rgb(pub u8, pub u8, pub u8);
 
 pub static PPU_PALETTE: [Rgb; PALETTE_SIZE] = [
