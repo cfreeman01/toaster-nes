@@ -114,9 +114,7 @@ impl Nes {
                 self.dma_tick();
             }
 
-            if self.controller.strobe {
-                self.controller.latch_buttons();
-            }
+            self.controller.update();
         }
     }
 

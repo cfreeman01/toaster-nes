@@ -382,7 +382,7 @@ impl Ppu {
         let bg_pixel = self.get_color(bg_addr);
         let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
         let sprite_pixel = self.get_color(sprite_addr);
-        let transparent_pixel = self.get_color(PaletteAddr{ data: 0 });
+        let transparent_pixel = self.get_color(PaletteAddr { data: 0 });
 
         if is_opaque(bg_addr)
             && is_opaque(sprite_addr)

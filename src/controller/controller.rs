@@ -28,8 +28,10 @@ impl Controller {
         }
     }
 
-    pub fn latch_buttons(&mut self) {
-        self.buttons_latched = self.buttons_dyn;
+    pub fn update(&mut self) {
+        if self.strobe {
+            self.buttons_latched = self.buttons_dyn;
+        }
     }
 
     pub fn read(&mut self) -> u8 {
