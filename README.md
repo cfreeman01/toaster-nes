@@ -25,3 +25,4 @@ Key controls are currently hardcoded:
 - No audio support
 - Only supports mapper 0 ROMs
 - Need to make keys re-bindable, possibly support gamepad input
+- Need to add support for 8x16 sprites, other misc. PPU features
