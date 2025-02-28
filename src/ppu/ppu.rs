@@ -208,7 +208,7 @@ impl Ppu {
             OAM_DATA => self.oam[self.oam_addr as usize],
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    self.read_buf = self.palette_ram[get_palette_idx(self.v.addr())];
+                    self.read_buf = self.palette_ram[get_palette_addr(self.v.addr())];
                     self.read_buf
                 } else {
                     let val = self.read_buf;
@@ -260,11 +260,7 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    if ![0x0014, 0x0018, 0x001C]
-                        .contains(&((self.v.addr() - PALETTE_START) % PALETTE_RAM_SIZE as u16))
-                    {
-                        self.palette_ram[get_palette_idx(self.v.addr())] = data;
-                    }
+                    self.palette_ram[get_palette_addr(self.v.addr())] = data;
                 } else {
                     bus.ppu_write(self.v.addr(), data);
                 }
@@ -386,6 +382,7 @@ impl Ppu {
         let bg_pixel = self.get_color(bg_addr);
         let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
         let sprite_pixel = self.get_color(sprite_addr);
+        let transparent_pixel = self.get_color(PaletteAddr{ data: 0 });
 
         if is_opaque(bg_addr)
             && is_opaque(sprite_addr)
@@ -400,10 +397,12 @@ impl Ppu {
             is_opaque(sprite_addr),
             is_opaque(bg_addr),
         ) {
-            (false, false, _) => bg_pixel,
+            (false, false, false) => transparent_pixel,
+            (false, false, true) => bg_pixel,
             (false, true, false) => sprite_pixel,
             (false, true, true) => bg_pixel,
-            (true, false, _) => bg_pixel,
+            (true, false, false) => transparent_pixel,
+            (true, false, true) => bg_pixel,
             (true, true, _) => sprite_pixel,
         }
     }
@@ -491,7 +490,7 @@ impl Ppu {
     }
 
     fn get_color(&self, palette_addr: PaletteAddr) -> Rgb {
-        PPU_PALETTE[self.palette_ram[get_palette_idx(palette_addr.data)] as usize % PALETTE_SIZE]
+        PPU_PALETTE[self.palette_ram[get_palette_addr(palette_addr.data)] as usize % PALETTE_SIZE]
     }
 
     fn fine_x(&self, val: u16) -> u16 {
@@ -516,14 +515,23 @@ fn load_shift_reg(reg: &mut u16, val: u8) {
     *reg |= val as u16;
 }
 
-fn get_palette_idx(addr: u16) -> usize {
-    let mut idx = addr as usize % PALETTE_RAM_SIZE;
+fn get_palette_addr(addr: u16) -> usize {
+    let mut addr = addr as usize % PALETTE_RAM_SIZE;
 
-    if idx % 4 == 0 {
-        idx = 0;
-    };
+    if addr == 0x0010 {
+        addr = 0x0000;
+    }
+    if addr == 0x0014 {
+        addr = 0x0004;
+    }
+    if addr == 0x0018 {
+        addr = 0x0008;
+    }
+    if addr == 0x001C {
+        addr = 0x000C;
+    }
 
-    idx
+    addr
 }
 
 fn is_opaque(palette_addr: PaletteAddr) -> bool {
