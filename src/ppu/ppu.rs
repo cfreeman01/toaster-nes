@@ -47,6 +47,7 @@ struct SpriteInfo {
     pattern_0: u8,
     pattern_1: u8,
     attr: SpriteAttr,
+    sprite_0: bool,
 }
 
 impl Default for SpriteInfo {
@@ -57,9 +58,11 @@ impl Default for SpriteInfo {
             pattern_0: 0xFF,
             pattern_1: 0xFF,
             attr: SpriteAttr { data: 0xff },
+            sprite_0: false,
         }
     }
 }
+
 pub struct Ppu {
     ctrl: PpuCtrl,
     mask: PpuMask,
@@ -129,22 +132,28 @@ impl Ppu {
             if (col >= 1 && col <= DISPLAY_WIDTH)
                 || (col >= PRE_FETCH_START && col <= PRE_FETCH_END)
             {
-                self.update_shift_regs();
+                if self.bg_enabled() {
+                    self.update_shift_regs();
+                }
 
                 match (col - 1) % 8 {
                     0 => {
                         self.load_shift_regs();
-                        self.fetch_tile_num(bus);
+                        self.fetch_bg_tile_num(bus);
                     }
-                    2 => self.fetch_attr_byte(bus),
+                    2 => self.fetch_bg_attr(bus),
                     4 => self.fetch_bg_pattern(bus, 0),
                     6 => self.fetch_bg_pattern(bus, 1),
-                    7 => self.inc_v_hor(),
+                    7 => {
+                        if self.bg_enabled() {
+                            self.inc_v_hor()
+                        }
+                    }
                     _ => (),
                 };
             };
 
-            if col == DISPLAY_WIDTH {
+            if col == DISPLAY_WIDTH && self.rendering_enabled() {
                 self.inc_v_ver();
             }
 
@@ -166,6 +175,7 @@ impl Ppu {
         if row == DISPLAY_HEIGHT + 1 && col == 1 {
             self.status.set_v(1)
         }
+
         if row == NUM_ROWS - 1 && col == 1 {
             self.status.set_v(0);
             self.status.set_s(0);
@@ -250,7 +260,9 @@ impl Ppu {
             }
             PPU_DATA => {
                 if self.v.addr() >= PALETTE_START {
-                    if ![0x0014, 0x0018, 0x001C].contains(&(self.v.addr() - PALETTE_START)) {
+                    if ![0x0014, 0x0018, 0x001C]
+                        .contains(&((self.v.addr() - PALETTE_START) % PALETTE_RAM_SIZE as u16))
+                    {
                         self.palette_ram[get_palette_idx(self.v.addr())] = data;
                     }
                 } else {
@@ -270,11 +282,11 @@ impl Ppu {
         self.nmi
     }
 
-    fn fetch_tile_num(&mut self, bus: &mut impl PpuBus) {
+    fn fetch_bg_tile_num(&mut self, bus: &mut impl PpuBus) {
         self.tile_num = bus.ppu_read(NAMETABLE_0_START | self.v.nt_addr());
     }
 
-    fn fetch_attr_byte(&mut self, bus: &mut impl PpuBus) {
+    fn fetch_bg_attr(&mut self, bus: &mut impl PpuBus) {
         let mut attr_addr = AttrAddr::default();
         attr_addr.set_tile_group_x(self.v.coarse_x() / 4);
         attr_addr.set_tile_group_y(self.v.coarse_y() / 4);
@@ -294,22 +306,18 @@ impl Ppu {
         pattern_addr.set_tile(self.tile_num as u16);
         pattern_addr.set_h(self.ctrl.b() as u16);
 
-        if plane == 0 {
+        if plane & 0x1 == 0 {
             self.bg_byte_0 = bus.ppu_read(pattern_addr.data);
-        } else if plane == 1 {
-            self.bg_byte_1 = bus.ppu_read(pattern_addr.data);
         } else {
-            panic!("Invalid plane.")
-        };
+            self.bg_byte_1 = bus.ppu_read(pattern_addr.data);
+        }
     }
 
     fn update_shift_regs(&mut self) {
-        if self.mask.b() == 1 {
-            self.bg_shift_reg_0 <<= 1;
-            self.bg_shift_reg_1 <<= 1;
-            self.attr_shift_reg_0 <<= 1;
-            self.attr_shift_reg_1 <<= 1;
-        }
+        self.bg_shift_reg_0 <<= 1;
+        self.bg_shift_reg_1 <<= 1;
+        self.attr_shift_reg_0 <<= 1;
+        self.attr_shift_reg_1 <<= 1;
     }
 
     fn load_shift_regs(&mut self) {
@@ -334,57 +342,63 @@ impl Ppu {
     }
 
     fn inc_v_hor(&mut self) {
-        if self.rendering_enabled() {
-            let mut coarse_x = self.v.coarse_x();
-            let mut nx = self.v.nx();
+        let mut coarse_x = self.v.coarse_x();
+        let mut nx = self.v.nx();
 
-            if coarse_x == 31 {
-                coarse_x = 0;
-                nx = !nx;
-            } else {
-                coarse_x += 1;
-            }
-
-            self.v.set_coarse_x(coarse_x);
-            self.v.set_nx(nx);
+        if coarse_x == 31 {
+            coarse_x = 0;
+            nx = !nx;
+        } else {
+            coarse_x += 1;
         }
+
+        self.v.set_coarse_x(coarse_x);
+        self.v.set_nx(nx);
     }
 
     fn inc_v_ver(&mut self) {
-        if self.rendering_enabled() {
-            let mut coarse_y = self.v.coarse_y();
-            let mut fine_y = self.v.fine_y();
-            let mut ny = self.v.ny();
+        let mut coarse_y = self.v.coarse_y();
+        let mut fine_y = self.v.fine_y();
+        let mut ny = self.v.ny();
 
-            if (fine_y < 7) {
-                fine_y += 1;
+        if (fine_y < 7) {
+            fine_y += 1;
+        } else {
+            fine_y = 0;
+            if coarse_y == 29 {
+                coarse_y = 0;
+                ny = !ny;
+            } else if coarse_y == 31 {
+                coarse_y = 0;
             } else {
-                fine_y = 0;
-                if coarse_y == 29 {
-                    coarse_y = 0;
-                    ny = !ny;
-                } else if coarse_y == 31 {
-                    coarse_y = 0;
-                } else {
-                    coarse_y += 1;
-                }
+                coarse_y += 1;
             }
-
-            self.v.set_coarse_y(coarse_y);
-            self.v.set_fine_y(fine_y);
-            self.v.set_ny(ny);
         }
+
+        self.v.set_coarse_y(coarse_y);
+        self.v.set_fine_y(fine_y);
+        self.v.set_ny(ny);
     }
 
     fn draw_pixel(&mut self, x: u32, y: u32, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         let frame_idx = ((y * DISPLAY_WIDTH + x) * 3) as usize;
-        let (sprite_pixel, sprite_in_front) = self.get_sprite_pixel(x);
-        let bg_pixel = self.get_bg_pixel();
+        let bg_addr = self.get_bg_pixel_info();
+        let bg_pixel = self.get_color(bg_addr);
+        let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
+        let sprite_pixel = self.get_color(sprite_addr);
+
+        if is_opaque(bg_addr)
+            && is_opaque(sprite_addr)
+            && sprite_info.sprite_0
+            && self.rendering_enabled()
+        {
+            self.status.set_s(1)
+        }
 
         Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = match (
-            sprite_in_front,
-            self.is_opaque(sprite_pixel),
-            self.is_opaque(bg_pixel),
+            sprite_info.attr.priority() == 0,
+            is_opaque(sprite_addr),
+            is_opaque(bg_addr),
         ) {
             (false, false, _) => bg_pixel,
             (false, true, false) => sprite_pixel,
@@ -394,17 +408,17 @@ impl Ppu {
         }
     }
 
-    fn get_bg_pixel(&mut self) -> Rgb {
+    fn get_bg_pixel_info(&mut self) -> PaletteAddr {
         let mut palette_addr = PaletteAddr::default();
-        palette_addr.set_p0((self.bg_shift_reg_0 << self.x) >> 15);
-        palette_addr.set_p1((self.bg_shift_reg_1 << self.x) >> 15);
-        palette_addr.set_a0((self.attr_shift_reg_0 << self.x) >> 15);
-        palette_addr.set_a1((self.attr_shift_reg_1 << self.x) >> 15);
+        palette_addr.set_p0(self.fine_x(self.bg_shift_reg_0));
+        palette_addr.set_p1(self.fine_x(self.bg_shift_reg_1));
+        palette_addr.set_a0(self.fine_x(self.attr_shift_reg_0));
+        palette_addr.set_a1(self.fine_x(self.attr_shift_reg_1));
 
-        self.get_color(palette_addr)
+        palette_addr
     }
 
-    fn get_sprite_pixel(&mut self, x: u32) -> (Rgb, bool) {
+    fn get_sprite_pixel_info(&mut self, x: u32) -> (SpriteInfo, PaletteAddr) {
         for sprite in self.sprites.iter() {
             let mut fine_x = x - sprite.x_pos as u32;
             if sprite.attr.flip_hor() == 1 {
@@ -421,11 +435,11 @@ impl Ppu {
                 palette_addr.set_a0(sprite.attr.palette0() as u16);
                 palette_addr.set_a1(sprite.attr.palette1() as u16);
                 palette_addr.set_s(1);
-                return (self.get_color(palette_addr), sprite.attr.priority() == 0);
+                return (*sprite, palette_addr);
             }
         }
 
-        (self.transparent_pixel(), false)
+        (SpriteInfo::default(), PaletteAddr { data: 0 })
     }
 
     fn sprite_eval(&mut self, row: u32, bus: &mut impl PpuBus) {
@@ -462,6 +476,7 @@ impl Ppu {
                         pattern_0: fetch_pattern(0),
                         pattern_1: fetch_pattern(1),
                         attr: attr,
+                        sprite_0: oam_idx == 0,
                     });
 
                     sprites_found += 1;
@@ -479,16 +494,20 @@ impl Ppu {
         PPU_PALETTE[self.palette_ram[get_palette_idx(palette_addr.data)] as usize % PALETTE_SIZE]
     }
 
-    fn transparent_pixel(&self) -> Rgb {
-        self.get_color(PaletteAddr { data: 0 })
+    fn fine_x(&self, val: u16) -> u16 {
+        (val << self.x) >> 15
     }
 
-    fn is_opaque(&self, color: Rgb) -> bool {
-        color != self.transparent_pixel()
+    fn bg_enabled(&self) -> bool {
+        self.mask.bg_enabled() == 1
+    }
+
+    fn sprites_enabled(&self) -> bool {
+        self.mask.sprites_enabled() == 1
     }
 
     fn rendering_enabled(&self) -> bool {
-        self.mask.s() == 1 || self.mask.b() == 1
+        self.bg_enabled() || self.sprites_enabled()
     }
 }
 
@@ -505,4 +524,8 @@ fn get_palette_idx(addr: u16) -> usize {
     };
 
     idx
+}
+
+fn is_opaque(palette_addr: PaletteAddr) -> bool {
+    !(palette_addr.p0() == 0 && palette_addr.p1() == 0)
 }

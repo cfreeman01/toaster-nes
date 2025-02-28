@@ -3,14 +3,17 @@ pub mod window;
 
 use lazy_static::lazy_static;
 use std::collections::HashMap;
-use std::{env, fs, time::{Instant, Duration}, thread};
+use std::{
+    env, fs, thread,
+    time::{Duration, Instant},
+};
 use toaster_nes::rom::{rom_get_info, rom_parse};
 use toaster_nes::*;
 use window::*;
 
 const WINDOW_TITLE: &str = "ToasterNES";
 const WINDOW_SCALE: u32 = 3;
-const FRAME_TIME_US: u64 = 16666;
+const FRAME_TIME_US: u128 = 16666;
 
 lazy_static! {
     static ref KEY_BINDS: HashMap<Key, Button> = [
@@ -55,9 +58,10 @@ fn main() {
             }
         }
 
-        let duration = time.elapsed().as_micros() as u64;
-
-        thread::sleep(Duration::from_micros(FRAME_TIME_US - duration));
+        let delay = (FRAME_TIME_US - time.elapsed().as_micros()) as u64;
+        if delay > 0 {
+            thread::sleep(Duration::from_micros(delay));
+        }
 
         window.render(&frame);
     }
