@@ -447,24 +447,43 @@ impl Ppu {
 
         while oam_idx < OAM_SIZE {
             let y = self.oam[oam_idx];
-            let tile = self.oam[oam_idx + 1];
+
+            let mut tile = if !self.sprites_8x16() {
+                self.oam[oam_idx + 1]
+            } else {
+                self.oam[oam_idx + 1] & !0x1
+            };
+
+            let pattern_table = if !self.sprites_8x16() {
+                self.ctrl.s()
+            } else {
+                self.oam[oam_idx + 1] & 0x1
+            } as u16;
+
             let attr = SpriteAttr {
                 data: self.oam[oam_idx + 2],
             };
-            let x = self.oam[oam_idx + 3];
-            let mut fine_y = row - (y as u32);
-            if attr.flip_ver() == 1 {
-                fine_y = 7 - fine_y;
-            }
 
-            if (0..8).contains(&fine_y) {
+            let x = self.oam[oam_idx + 3];
+
+            let mut fine_y = row - (y as u32);
+            let y_max = if self.sprites_8x16() { 15 } else { 7 };
+
+            if (0..=y_max).contains(&fine_y) {
                 if sprites_found < SPRITES_PER_ROW {
+                    if attr.flip_ver() == 1 {
+                        fine_y = y_max - fine_y;
+                    }
+                    if fine_y > 7 {
+                        tile += 1;
+                    }
+
                     let mut fetch_pattern = |plane| -> u8 {
                         let mut pattern_addr = PatternAddr::default();
                         pattern_addr.set_fine_y(fine_y as u16);
                         pattern_addr.set_p(plane as u16);
                         pattern_addr.set_tile(tile as u16);
-                        pattern_addr.set_h(self.ctrl.s() as u16);
+                        pattern_addr.set_h(pattern_table);
 
                         bus.ppu_read(pattern_addr.data)
                     };
@@ -507,6 +526,10 @@ impl Ppu {
 
     fn rendering_enabled(&self) -> bool {
         self.bg_enabled() || self.sprites_enabled()
+    }
+
+    fn sprites_8x16(&self) -> bool {
+        self.ctrl.h() == 1
     }
 }
 
