@@ -16,7 +16,7 @@ mod cartridge;
 #[path = "controller/controller.rs"]
 mod controller;
 
-use cartridge::{cart_init, Cartridge};
+use cartridge::Cartridge;
 pub use controller::Button;
 use controller::Controller;
 use cpu::{Cpu, CpuBus};
@@ -42,7 +42,7 @@ pub struct Nes {
     cpu: Cpu,
     ppu: Ppu,
     ram: [u8; RAM_SIZE],
-    cartridge: Box<dyn Cartridge>,
+    cartridge: Cartridge,
     controller: Controller,
     dma_flag: bool,
     dma_addr: u16,
@@ -55,7 +55,7 @@ macro_rules! cpu_bus {
         &mut NesCpuBus {
             ram: &mut $nes.ram,
             ppu: &mut $nes.ppu,
-            cartridge: &mut *$nes.cartridge,
+            cartridge: &mut $nes.cartridge,
             controller: &mut $nes.controller,
             dma_flag: &mut $nes.dma_flag,
             dma_addr: &mut $nes.dma_addr,
@@ -77,7 +77,7 @@ impl Nes {
             cpu: Cpu::default(),
             ppu: Ppu::default(),
             ram: [0xff; RAM_SIZE],
-            cartridge: cart_init(rom),
+            cartridge: Cartridge::init(rom),
             controller: Controller::default(),
             dma_flag: false,
             dma_addr: 0,
@@ -103,7 +103,7 @@ impl Nes {
     }
 
     fn tick(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
-        self.ppu.tick(ppu_bus!(*self.cartridge), frame);
+        self.ppu.tick(ppu_bus!(self.cartridge), frame);
 
         self.cpu.nmi = self.ppu.nmi();
 
@@ -127,7 +127,7 @@ impl Nes {
             self.ppu.cpu_write(
                 PPU_REG_START + OAM_DATA,
                 self.dma_data,
-                ppu_bus!(*self.cartridge),
+                ppu_bus!(self.cartridge),
             );
 
             if self.dma_addr & 0x00FF == 0 {
@@ -142,7 +142,7 @@ impl Nes {
 struct NesCpuBus<'a> {
     ram: &'a mut [u8; RAM_SIZE],
     ppu: &'a mut Ppu,
-    cartridge: &'a mut dyn Cartridge,
+    cartridge: &'a mut Cartridge,
     controller: &'a mut Controller,
     dma_flag: &'a mut bool,
     dma_addr: &'a mut u16,
@@ -152,7 +152,7 @@ impl CpuBus for NesCpuBus<'_> {
     fn cpu_read(&mut self, addr: u16) -> u8 {
         match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
-            PPU_REG_START..=PPU_REG_END => self.ppu.cpu_read(addr, ppu_bus!(*self.cartridge)),
+            PPU_REG_START..=PPU_REG_END => self.ppu.cpu_read(addr, ppu_bus!(self.cartridge)),
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr),
             BUTTON_REG => self.controller.read(),
             _ => 0x00,
@@ -163,7 +163,7 @@ impl CpuBus for NesCpuBus<'_> {
         match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE] = data,
             PPU_REG_START..=PPU_REG_END => {
-                self.ppu.cpu_write(addr, data, ppu_bus!(*self.cartridge))
+                self.ppu.cpu_write(addr, data, ppu_bus!(self.cartridge))
             }
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_write(addr, data),
             DMA_REG => {
@@ -177,7 +177,7 @@ impl CpuBus for NesCpuBus<'_> {
 }
 
 struct NesPpuBus<'a> {
-    cartridge: &'a mut dyn Cartridge,
+    cartridge: &'a mut Cartridge,
 }
 
 impl PpuBus for NesPpuBus<'_> {
