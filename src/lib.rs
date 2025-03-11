@@ -26,6 +26,8 @@ use rom::Rom;
 pub const DISPLAY_WIDTH: u32 = 256;
 pub const DISPLAY_HEIGHT: u32 = 240;
 pub const FRAME_SIZE_BYTES: usize = (DISPLAY_WIDTH * DISPLAY_HEIGHT * 3) as usize;
+pub const KB_8: usize = 8192;
+pub const KB_16: usize = KB_8 * 2;
 const RAM_SIZE: usize = 0x800;
 const RAM_START: u16 = 0x0000;
 const RAM_END: u16 = 0x1FFF;
@@ -162,9 +164,7 @@ impl CpuBus for NesCpuBus<'_> {
     fn cpu_write(&mut self, addr: u16, data: u8) {
         match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE] = data,
-            PPU_REG_START..=PPU_REG_END => {
-                self.ppu.cpu_write(addr, data, ppu_bus!(self.cartridge))
-            }
+            PPU_REG_START..=PPU_REG_END => self.ppu.cpu_write(addr, data, ppu_bus!(self.cartridge)),
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_write(addr, data),
             DMA_REG => {
                 *self.dma_addr = (data as u16) << 8;

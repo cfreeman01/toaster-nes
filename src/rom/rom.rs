@@ -1,7 +1,6 @@
 const HDR_SIZE: usize = 16;
 const TRAINER_SIZE: usize = 512;
-const KB_8: usize = 8192;
-const KB_16: usize = 16384;
+use crate::{KB_16, KB_8};
 
 pub struct Rom {
     pub prg_rom: Vec<u8>,
