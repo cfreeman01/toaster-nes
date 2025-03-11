@@ -58,9 +58,9 @@ fn main() {
             }
         }
 
-        let delay = (FRAME_TIME_US - time.elapsed().as_micros()) as u64;
+        let delay = (FRAME_TIME_US - time.elapsed().as_micros()) as i128;
         if delay > 0 {
-            thread::sleep(Duration::from_micros(delay));
+            thread::sleep(Duration::from_micros(delay as u64));
         }
 
         window.render(&frame);
