@@ -1,10 +1,7 @@
 # ToasterNES
 Simple NES emulator written in Rust. Currently in development.
 
-![image](https://github.com/user-attachments/assets/68f7cadc-ddb7-43a6-b382-a7b103b8be50)
-![image](https://github.com/user-attachments/assets/06bc51a1-b8fa-41fa-853f-bf6caf7b3842)
-![image](https://github.com/user-attachments/assets/474ce6fd-89a1-430f-a710-0a0b5b4f8464)
-![image](https://github.com/user-attachments/assets/78a635c8-018f-4a93-82c0-388aa84fd68c)
+![image](https://github.com/user-attachments/assets/92c708cc-c575-47aa-8acd-70c59c53c6ea)
 
 ## Building
 TODO: add build instructions for Linux and Windows
