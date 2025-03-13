@@ -1,24 +1,23 @@
 # ToasterNES
-Simple NES emulator written in Rust. Currently in development.
+Simple NES emulator written in Rust.
 
 ![image](https://github.com/user-attachments/assets/92c708cc-c575-47aa-8acd-70c59c53c6ea)
 
-## Building
-TODO: add build instructions for Linux and Windows
+## Building & Running
+- The Rust toolchain is required: https://www.rust-lang.org/tools/install
 
-## Running
-Run from the command line, passing in the path to the ROM as argument: 
-
+- Use Cargo to build and run, passing in the path to the ROM as argument:  
 `cargo run --release <ROM path>`
 
-To play the game, use the keyboard controls:
-| Key | Button |
-| -------- | ------- |
-| WASD | Up, Left, Down, Right |
-| Q | Select |
-| E | Start |
-| L | A |
-| K | B |
+- To play the game, use the keyboard controls:
+
+    | Key | Button |
+    | -------- | ------- |
+    | WASD | Up, Left, Down, Right |
+    | Q | Select |
+    | E | Start |
+    | L | A |
+    | K | B |
 
 ## Mapper Support
 "Mappers" represent different types of NES cartridges. 
