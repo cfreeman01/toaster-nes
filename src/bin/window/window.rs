@@ -81,14 +81,12 @@ impl Window {
             gl::Viewport(0, 0, width, height)
         });
 
-        let mut vao_ptr: *mut u32 = std::ptr::null_mut();
-        let mut vao;
+        let mut vao: u32 = 0;
         let shader = create_shader();
         let texture = create_texture();
 
         unsafe {
-            gl::GenVertexArrays(1, vao_ptr);
-            vao = *vao_ptr;
+            gl::GenVertexArrays(1, &mut vao);
 
             gl::Viewport(
                 0,
@@ -190,18 +188,18 @@ fn create_shader() -> u32 {
 }
 
 fn create_texture() -> u32 {
-    let mut texture: *mut u32 = std::ptr::null_mut();
+    let mut texture: u32 = 0;
 
     unsafe {
-        gl::GenTextures(1, texture);
+        gl::GenTextures(1, &mut texture);
 
         gl::ActiveTexture(gl::TEXTURE0);
 
-        gl::BindTexture(gl::TEXTURE_2D, *texture);
+        gl::BindTexture(gl::TEXTURE_2D, texture);
 
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-
-        *texture
     }
+
+    texture
 }
