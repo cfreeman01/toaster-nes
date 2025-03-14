@@ -50,6 +50,7 @@ pub struct Nes {
     dma_addr: u16,
     dma_data: u8,
     dma_write_toggle: bool,
+    cpu_bus_val: u8,
 }
 
 macro_rules! cpu_bus {
@@ -61,6 +62,7 @@ macro_rules! cpu_bus {
             controller: &mut $nes.controller,
             dma_flag: &mut $nes.dma_flag,
             dma_addr: &mut $nes.dma_addr,
+            cpu_bus_val: &mut $nes.cpu_bus_val
         }
     };
 }
@@ -85,6 +87,7 @@ impl Nes {
             dma_addr: 0,
             dma_data: 0,
             dma_write_toggle: false,
+            cpu_bus_val: 0,
         };
 
         nes.cpu.reset = true;
@@ -148,17 +151,20 @@ struct NesCpuBus<'a> {
     controller: &'a mut Controller,
     dma_flag: &'a mut bool,
     dma_addr: &'a mut u16,
+    cpu_bus_val: &'a mut u8,
 }
 
 impl CpuBus for NesCpuBus<'_> {
     fn cpu_read(&mut self, addr: u16) -> u8 {
-        match addr {
+        *self.cpu_bus_val = match addr {
             RAM_START..=RAM_END => self.ram[addr as usize % RAM_SIZE],
             PPU_REG_START..=PPU_REG_END => self.ppu.cpu_read(addr, ppu_bus!(self.cartridge)),
             CPU_CART_START..=CPU_CART_END => self.cartridge.cpu_read(addr),
-            BUTTON_REG => self.controller.read(),
-            _ => 0x00,
-        }
+            BUTTON_REG => self.controller.read() | (*self.cpu_bus_val & 0xF0),
+            _ => *self.cpu_bus_val,
+        };
+
+        *self.cpu_bus_val
     }
 
     fn cpu_write(&mut self, addr: u16, data: u8) {
