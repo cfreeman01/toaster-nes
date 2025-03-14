@@ -394,8 +394,8 @@ impl Ppu {
 
         Rgb(frame[frame_idx], frame[frame_idx + 1], frame[frame_idx + 2]) = match (
             sprite_info.attr.priority() == 0,
-            is_opaque(sprite_addr),
-            is_opaque(bg_addr),
+            is_opaque(sprite_addr) && self.sprites_enabled(),
+            is_opaque(bg_addr) && self.bg_enabled(),
         ) {
             (false, false, false) => transparent_pixel,
             (false, false, true) => bg_pixel,
