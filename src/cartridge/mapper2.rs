@@ -7,7 +7,7 @@ pub struct Mapper2 {
 
 impl Mapper for Mapper2 {
     fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData) {
-        self.bank_0_offset = (data as usize) * KB_16
+        self.bank_0_offset = ((data as usize) * KB_16) % cart.prg_rom_size
     }
 
     fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
@@ -23,10 +23,6 @@ impl Mapper for Mapper2 {
         };
 
         offset
-    }
-
-    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize {
-        addr as usize
     }
 }
 

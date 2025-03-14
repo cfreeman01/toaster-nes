@@ -4,9 +4,13 @@ pub mod mapper0;
 #[path = "mapper2.rs"]
 pub mod mapper2;
 
+#[path = "mapper3.rs"]
+pub mod mapper3;
+
 use crate::rom::Rom;
 use mapper0::Mapper0;
 use mapper2::Mapper2;
+use mapper3::Mapper3;
 
 pub const PRG_RAM_START: u16 = 0x6000;
 pub const PRG_RAM_END: u16 = 0x7FFF;
@@ -25,12 +29,6 @@ pub const NAMETABLE_2_END: u16 = NAMETABLE_2_START + (NAMETABLE_SIZE - 1);
 pub const NAMETABLE_3_START: u16 = NAMETABLE_2_END + 1;
 pub const NAMETABLE_3_END: u16 = NAMETABLE_3_START + (NAMETABLE_SIZE - 1);
 
-trait Mapper {
-    fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData);
-    fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize;
-    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize;
-}
-
 struct CartData<'a> {
     prg_rom_size: usize,
     chr_size: usize,
@@ -45,6 +43,18 @@ macro_rules! cart_data {
             vert_mirrored: &mut $cart.vert_mirrored,
         }
     };
+}
+
+trait Mapper {
+    fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData) {}
+
+    fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
+        (addr - PRG_ROM_START) as usize % cart.prg_rom_size
+    }
+
+    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize {
+        addr as usize
+    }
 }
 
 pub struct Cartridge {
@@ -73,6 +83,7 @@ impl Cartridge {
             mapper: match rom.mapper {
                 0 => Box::new(Mapper0::init()),
                 2 => Box::new(Mapper2::init()),
+                3 => Box::new(Mapper3::init()),
                 _ => panic!("Invalid or unsupported mapper: {}", rom.mapper),
             },
         }
