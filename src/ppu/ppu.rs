@@ -379,10 +379,19 @@ impl Ppu {
     fn draw_pixel(&mut self, x: u32, y: u32, frame: &mut [u8; FRAME_SIZE_BYTES]) {
         let frame_idx = ((y * DISPLAY_WIDTH + x) * 3) as usize;
         let bg_addr = self.get_bg_pixel_info();
-        let bg_pixel = self.get_color(bg_addr);
         let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
-        let sprite_pixel = self.get_color(sprite_addr);
         let transparent_pixel = self.get_color(PaletteAddr { data: 0 });
+        let mut bg_pixel = self.get_color(bg_addr);
+        let mut sprite_pixel = self.get_color(sprite_addr);
+
+        if x < 8 {
+            if !(self.mask.bg_left_show() == 1) {
+                bg_pixel = transparent_pixel
+            }
+            if !(self.mask.sprite_left_show() == 1) {
+                sprite_pixel = transparent_pixel
+            }
+        }
 
         if is_opaque(bg_addr)
             && is_opaque(sprite_addr)

@@ -62,7 +62,7 @@ macro_rules! cpu_bus {
             controller: &mut $nes.controller,
             dma_flag: &mut $nes.dma_flag,
             dma_addr: &mut $nes.dma_addr,
-            cpu_bus_val: &mut $nes.cpu_bus_val
+            cpu_bus_val: &mut $nes.cpu_bus_val,
         }
     };
 }

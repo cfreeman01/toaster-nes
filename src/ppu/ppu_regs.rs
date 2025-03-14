@@ -67,6 +67,8 @@ pub struct PpuMask {
 }
 
 impl PpuMask {
+    get_set_field!(bg_left_show, set_bg_left_show, 1, 1, u8);
+    get_set_field!(sprite_left_show, set_sprite_left_show, 2, 1, u8);
     get_set_field!(bg_enabled, set_bg_enabled, 3, 1, u8);
     get_set_field!(sprites_enabled, set_sprites_enabled, 4, 1, u8);
 }
