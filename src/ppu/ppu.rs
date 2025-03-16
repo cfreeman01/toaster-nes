@@ -385,10 +385,10 @@ impl Ppu {
         let mut sprite_pixel = self.get_color(sprite_addr);
 
         if x < 8 {
-            if !(self.mask.bg_left_show() == 1) {
+            if self.mask.bg_left_show() != 1 {
                 bg_pixel = transparent_pixel
             }
-            if !(self.mask.sprite_left_show() == 1) {
+            if self.mask.sprite_left_show() != 1 {
                 sprite_pixel = transparent_pixel
             }
         }

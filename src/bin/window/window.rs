@@ -1,7 +1,7 @@
 use core::str;
 use gl::{types::*, VERTEX_SHADER};
 pub use glfw::{Action, Key};
-use glfw::{Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
+use glfw::{ffi::{glfwGetPrimaryMonitor, glfwWindowHint}, Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use std::{
     ffi::{c_void, CString},
     ptr,
@@ -72,13 +72,27 @@ impl Window {
 
         window.set_key_polling(true);
         window.set_size_limits(Some(native_width), Some(native_height), None, None);
-        window.set_aspect_ratio(native_width, native_height);
         window.make_current();
 
         gl::load_with(|ptr| window.get_proc_address(ptr) as *const _);
 
-        window.set_size_callback(|window, width, height| unsafe {
-            gl::Viewport(0, 0, width, height)
+        window.set_size_callback(move |window, width, height| unsafe {
+            let ratio_win = width as f32 / height as f32;
+            let ratio_native = native_width as f32 / native_height as f32;
+
+            let (new_width, new_height) = if ratio_win > ratio_native {
+                ((height as f32 * ratio_native) as i32, height)
+            } else {
+                (width, (width as f32 * (1.0 / ratio_native)) as i32)
+            };
+
+            let (new_x, new_y) = if ratio_win > ratio_native {
+                ((width / 2) - (new_width / 2), 0)
+            } else {
+                (0, (height / 2) - (new_height / 2))
+            };
+
+            gl::Viewport(new_x, new_y, new_width, new_height);
         });
 
         let mut vao: u32 = 0;
