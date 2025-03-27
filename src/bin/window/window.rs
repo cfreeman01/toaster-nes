@@ -1,7 +1,10 @@
 use core::str;
 use gl::{types::*, VERTEX_SHADER};
+use glfw::{
+    ffi::{glfwGetPrimaryMonitor, glfwWindowHint},
+    Context, Glfw, GlfwReceiver, PWindow, WindowEvent,
+};
 pub use glfw::{Action, Key};
-use glfw::{ffi::{glfwGetPrimaryMonitor, glfwWindowHint}, Context, Glfw, GlfwReceiver, PWindow, WindowEvent};
 use std::{
     ffi::{c_void, CString},
     ptr,

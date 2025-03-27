@@ -1,6 +1,9 @@
 #[path = "assemble/assemble.rs"]
 pub mod assemble;
 
+#[path = "utils/bitfield.rs"]
+pub mod bitfield;
+
 #[path = "rom/rom.rs"]
 pub mod rom;
 
@@ -26,8 +29,10 @@ use rom::Rom;
 pub const DISPLAY_WIDTH: u32 = 256;
 pub const DISPLAY_HEIGHT: u32 = 240;
 pub const FRAME_SIZE_BYTES: usize = (DISPLAY_WIDTH * DISPLAY_HEIGHT * 3) as usize;
-pub const KB_8: usize = 8192;
+pub const KB_4: usize = 4096;
+pub const KB_8: usize = KB_4 * 2;
 pub const KB_16: usize = KB_8 * 2;
+pub const KB_32: usize = KB_16 * 2;
 const RAM_SIZE: usize = 0x800;
 const RAM_START: u16 = 0x0000;
 const RAM_END: u16 = 0x1FFF;

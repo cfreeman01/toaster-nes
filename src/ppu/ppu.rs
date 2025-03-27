@@ -5,6 +5,7 @@ mod ppu_palette;
 #[cfg(test)]
 mod test;
 
+use crate::bitfield::*;
 use crate::cartridge::NAMETABLE_0_START;
 use crate::{DISPLAY_HEIGHT, DISPLAY_WIDTH, FRAME_SIZE_BYTES, PPU_REG_END, PPU_REG_START};
 use ppu_palette::*;
@@ -28,17 +29,6 @@ const ATTR_TABLE_OFFSET: u32 = 0x23C0;
 const PALETTE_START: u16 = 0x3F00;
 pub const OAM_SIZE: usize = 256;
 const SPRITES_PER_ROW: usize = 8;
-
-macro_rules! field {
-    ($val:expr, $pos:expr, $width:expr) => {{
-        let mut mask = 0;
-        for _ in 0..$width {
-            mask <<= 1;
-            mask |= 0x1;
-        }
-        ($val >> $pos) & mask
-    }};
-}
 
 #[derive(Copy, Clone)]
 struct SpriteInfo {

@@ -2,12 +2,12 @@ use super::*;
 use crate::{KB_16, KB_8};
 
 pub struct Mapper2 {
-    bank_0_offset: usize,
+    prg_offset: usize,
 }
 
 impl Mapper for Mapper2 {
     fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData) {
-        self.bank_0_offset = ((data as usize) * KB_16) % cart.prg_rom_size
+        self.prg_offset = ((data as usize) * KB_16) % cart.prg_rom_size
     }
 
     fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
@@ -15,7 +15,7 @@ impl Mapper for Mapper2 {
         let mut offset = (addr - PRG_ROM_START) as usize % KB_16;
 
         offset += if bank == 0 {
-            self.bank_0_offset
+            self.prg_offset
         } else if bank == 1 {
             cart.prg_rom_size - KB_16
         } else {
@@ -28,6 +28,6 @@ impl Mapper for Mapper2 {
 
 impl Mapper2 {
     pub fn init() -> Mapper2 {
-        Mapper2 { bank_0_offset: 0 }
+        Mapper2 { prg_offset: 0 }
     }
 }
