@@ -1,7 +1,7 @@
 # ToasterNES
 Simple NES emulator written in Rust.
 
-![image](https://github.com/user-attachments/assets/92c708cc-c575-47aa-8acd-70c59c53c6ea)
+![nes-emu](https://github.com/user-attachments/assets/8ef08163-2636-45e5-86cf-e46cd5d384a6)
 
 ## Building & Running
 - The Rust toolchain is required: https://www.rust-lang.org/tools/install
