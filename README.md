@@ -27,9 +27,11 @@ Currently supported mappers:
 | Mapper | Example Games |
 | -------- | ------- |
 | 0 | _Donkey Kong_, _Super Mario Bros._, _Ice Climber_, _Dig Dug_|
+| 1 | _The Legend of Zelda_, _Tetris_, _Metroid_, _Dr. Mario_, _Ninja Gaiden_|
 | 2 | _DuckTales_, _Mega Man_, _Castlevania_, _Metal Gear_ |
 | 3 | _Gradius_, _Paperboy_, _Track & Field_ |
 
 ## To-do List
 - Add audio
 - Support more mappers
+- Support non-volatile memory
