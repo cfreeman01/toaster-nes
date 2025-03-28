@@ -19,10 +19,15 @@ pub fn rom_parse(data: &[u8]) -> Result<Rom, String> {
     let prg_rom_offset = HDR_SIZE + if trainer_present { TRAINER_SIZE } else { 0 };
     let chr_rom_offset = prg_rom_offset + prg_rom_size;
     let mapper: u8 = (data[6] >> 4) | (data[7] & 0xF0);
-    let vert_mirrored = (data[6] & 0x01) == 1;
+    let vert_mirrored = (data[6] & 0x1) == 0x1;
 
     let prg_ram_size: u16 = if ines_2 {
-        let shift_count = data[10] & 0x0F;
+        let shift_count = if (data[10] & 0xF0) != 0 {
+            (data[10] & 0xF0) >> 4
+        } else {
+            data[10] & 0x0F
+        };
+
         if shift_count == 0 {
             0
         } else {
@@ -33,7 +38,12 @@ pub fn rom_parse(data: &[u8]) -> Result<Rom, String> {
     };
 
     let chr_ram_size: u16 = if ines_2 {
-        let shift_count = data[11] & 0x0F;
+        let shift_count = if (data[11] & 0xF0) != 0 {
+            (data[11] & 0xF0) >> 4
+        } else {
+            data[11] & 0x0F
+        };
+
         if shift_count == 0 {
             0
         } else {

@@ -51,12 +51,12 @@ impl Mapper for Mapper1 {
                     _ => {}
                 }
 
-                *cart.nt_conf = match self.ctrl.nt_conf(){
+                *cart.nt_conf = match self.ctrl.nt_conf() {
                     0 => OneScreenLower,
                     1 => OneScreenUpper,
                     2 => Horizontal,
                     3 => Vertical,
-                    _ => panic!()
+                    _ => panic!(),
                 };
 
                 self.shift_reg = 0;
