@@ -1,5 +1,5 @@
 use super::*;
-use crate::{bitfield::*, KB_16, KB_32, KB_4, KB_8};
+use crate::{bitfield::*, KB_1, KB_16, KB_2, KB_32, KB_4, KB_8};
 
 const MSB: u8 = 0x80;
 const LSB: u8 = 0x01;
@@ -65,7 +65,7 @@ impl Mapper for Mapper1 {
         }
     }
 
-    fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_prg(&mut self, addr: u16, cart: &mut CartData) -> usize {
         let prg_bank = self.prg_bank as usize;
         let offset = (addr as usize) % KB_32;
 
@@ -89,7 +89,7 @@ impl Mapper for Mapper1 {
         }) % cart.prg_rom_size
     }
 
-    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_chr(&mut self, addr: u16, cart: &mut CartData) -> usize {
         let chr_bank_0 = self.chr_bank_0 as usize;
         let chr_bank_1 = self.chr_bank_1 as usize;
         let offset = (addr as usize) % KB_8;

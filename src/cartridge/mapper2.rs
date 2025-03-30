@@ -10,7 +10,7 @@ impl Mapper for Mapper2 {
         self.prg_offset = ((data as usize) * KB_16) % cart.prg_rom_size
     }
 
-    fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_prg(&mut self, addr: u16, cart: &mut CartData) -> usize {
         let bank = (addr - PRG_ROM_START) as usize / KB_16;
         let mut offset = (addr - PRG_ROM_START) as usize % KB_16;
 

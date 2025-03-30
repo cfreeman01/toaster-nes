@@ -157,7 +157,7 @@ impl Ppu {
         if col == DISPLAY_WIDTH + 1 {
             self.sprites.clear();
 
-            if row < DISPLAY_HEIGHT {
+            if row < DISPLAY_HEIGHT || row == NUM_ROWS - 1 {
                 self.sprite_eval(row, bus);
             }
         }
@@ -468,34 +468,35 @@ impl Ppu {
             let mut fine_y = row - (y as u32);
             let y_max = if self.sprites_8x16() { 15 } else { 7 };
 
+            if attr.flip_ver() == 1 {
+                fine_y = y_max - fine_y;
+            }
+            if fine_y > 7 {
+                tile += 1;
+            }
+
+            let mut fetch_pattern = |plane| -> u8 {
+                let mut pattern_addr = PatternAddr::default();
+                pattern_addr.set_fine_y(fine_y as u16);
+                pattern_addr.set_p(plane as u16);
+                pattern_addr.set_tile(tile as u16);
+                pattern_addr.set_h(pattern_table);
+
+                bus.ppu_read(pattern_addr.data)
+            };
+
+            let sprite_info = SpriteInfo {
+                x_pos: x,
+                y_pos: y,
+                pattern_0: fetch_pattern(0),
+                pattern_1: fetch_pattern(1),
+                attr: attr,
+                sprite_0: oam_idx == 0,
+            };
+
             if (0..=y_max).contains(&fine_y) {
                 if sprites_found < SPRITES_PER_ROW {
-                    if attr.flip_ver() == 1 {
-                        fine_y = y_max - fine_y;
-                    }
-                    if fine_y > 7 {
-                        tile += 1;
-                    }
-
-                    let mut fetch_pattern = |plane| -> u8 {
-                        let mut pattern_addr = PatternAddr::default();
-                        pattern_addr.set_fine_y(fine_y as u16);
-                        pattern_addr.set_p(plane as u16);
-                        pattern_addr.set_tile(tile as u16);
-                        pattern_addr.set_h(pattern_table);
-
-                        bus.ppu_read(pattern_addr.data)
-                    };
-
-                    self.sprites.push(SpriteInfo {
-                        x_pos: x,
-                        y_pos: y,
-                        pattern_0: fetch_pattern(0),
-                        pattern_1: fetch_pattern(1),
-                        attr: attr,
-                        sprite_0: oam_idx == 0,
-                    });
-
+                    self.sprites.push(sprite_info);
                     sprites_found += 1;
                 } else {
                     self.status.set_o(1);

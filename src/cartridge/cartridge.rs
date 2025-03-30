@@ -10,11 +10,15 @@ pub mod mapper2;
 #[path = "mapper3.rs"]
 pub mod mapper3;
 
+#[path = "mapper4.rs"]
+pub mod mapper4;
+
 use crate::rom::Rom;
 use mapper0::Mapper0;
 use mapper1::Mapper1;
 use mapper2::Mapper2;
 use mapper3::Mapper3;
+use mapper4::Mapper4;
 use NametableConf::*;
 
 pub const PRG_RAM_START: u16 = 0x6000;
@@ -47,6 +51,7 @@ struct CartData<'a> {
     prg_rom_size: usize,
     chr_size: usize,
     nt_conf: &'a mut NametableConf,
+    irq: &'a mut bool,
 }
 
 macro_rules! cart_data {
@@ -55,6 +60,7 @@ macro_rules! cart_data {
             prg_rom_size: $cart.prg_rom.len(),
             chr_size: $cart.chr.len(),
             nt_conf: &mut $cart.nt_conf,
+            irq: &mut $cart.irq,
         }
     };
 }
@@ -62,11 +68,11 @@ macro_rules! cart_data {
 trait Mapper {
     fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData) {}
 
-    fn map_prg(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_prg(&mut self, addr: u16, cart: &mut CartData) -> usize {
         (addr - PRG_ROM_START) as usize % cart.prg_rom_size
     }
 
-    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_chr(&mut self, addr: u16, cart: &mut CartData) -> usize {
         addr as usize
     }
 }
@@ -79,6 +85,7 @@ pub struct Cartridge {
     nt_conf: NametableConf,
     vram: [u8; VRAM_SIZE],
     mapper: Box<dyn Mapper>,
+    irq: bool,
 }
 
 impl Cartridge {
@@ -103,8 +110,10 @@ impl Cartridge {
                 1 => Box::new(Mapper1::init()),
                 2 => Box::new(Mapper2::init()),
                 3 => Box::new(Mapper3::init()),
+                4 => Box::new(Mapper4::init()),
                 _ => panic!("Invalid or unsupported mapper: {}", rom.mapper),
             },
+            irq: false,
         }
     }
 
@@ -157,6 +166,10 @@ impl Cartridge {
             NAMETABLE_0_START..=NAMETABLE_3_END => self.vram[vram_idx(addr, self.nt_conf)] = data,
             _ => (),
         }
+    }
+
+    pub fn irq(&self) -> bool {
+        self.irq
     }
 }
 

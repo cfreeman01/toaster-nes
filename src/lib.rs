@@ -29,7 +29,9 @@ use rom::Rom;
 pub const DISPLAY_WIDTH: u32 = 256;
 pub const DISPLAY_HEIGHT: u32 = 240;
 pub const FRAME_SIZE_BYTES: usize = (DISPLAY_WIDTH * DISPLAY_HEIGHT * 3) as usize;
-pub const KB_4: usize = 4096;
+pub const KB_1: usize = 1024;
+pub const KB_2: usize = KB_1 * 2;
+pub const KB_4: usize = KB_2 * 2;
 pub const KB_8: usize = KB_4 * 2;
 pub const KB_16: usize = KB_8 * 2;
 pub const KB_32: usize = KB_16 * 2;
@@ -116,6 +118,7 @@ impl Nes {
         self.ppu.tick(ppu_bus!(self.cartridge), frame);
 
         self.cpu.nmi = self.ppu.nmi();
+        self.cpu.irq = self.cartridge.irq();
 
         if self.ppu.cycles() % 3 == 0 {
             if !self.dma_flag {

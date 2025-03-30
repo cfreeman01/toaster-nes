@@ -10,7 +10,7 @@ impl Mapper for Mapper3 {
         self.chr_offset = ((data as usize) * KB_8) % cart.chr_size
     }
 
-    fn map_chr(&self, addr: u16, cart: &mut CartData) -> usize {
+    fn map_chr(&mut self, addr: u16, cart: &mut CartData) -> usize {
         (addr as usize) + self.chr_offset
     }
 }
