@@ -46,9 +46,9 @@ impl Mapper for Mapper4 {
             },
             (1, 0) => {
                 *cart.nt_conf = if data & 0x1 == 0x1 {
-                    Vertical
-                } else {
                     Horizontal
+                } else {
+                    Vertical
                 }
             }
             (2, 0) => self.irq_latch = data,
