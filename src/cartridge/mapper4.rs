@@ -102,38 +102,26 @@ impl Mapper for Mapper4 {
         let chr_2kb_bank_0 = ((self.chr_2kb_bank_0 >> 1) as usize, KB_2);
         let chr_2kb_bank_1 = ((self.chr_2kb_bank_1 >> 1) as usize, KB_2);
 
-        let (base, size) = if (addr / KB_4) == 0 {
-            if self.bank_select.chr_mode() == 0 {
-                if (offset / KB_2) == 0 {
-                    chr_2kb_bank_0
-                } else {
-                    chr_2kb_bank_1
-                }
+        let (base, size) = if ((addr / KB_4) == 0 && self.bank_select.chr_mode() == 0)
+            || ((addr / KB_4) == 1 && self.bank_select.chr_mode() == 1)
+        {
+            if (offset / KB_2) == 0 {
+                chr_2kb_bank_0
             } else {
-                match offset / KB_1 {
-                    0 => chr_1kb_bank_0,
-                    1 => chr_1kb_bank_1,
-                    2 => chr_1kb_bank_2,
-                    3 => chr_1kb_bank_3,
-                    _ => panic!(),
-                }
+                chr_2kb_bank_1
+            }
+        } else if ((addr / KB_4) == 0 && self.bank_select.chr_mode() == 1)
+            || ((addr / KB_4) == 1 && self.bank_select.chr_mode() == 0)
+        {
+            match offset / KB_1 {
+                0 => chr_1kb_bank_0,
+                1 => chr_1kb_bank_1,
+                2 => chr_1kb_bank_2,
+                3 => chr_1kb_bank_3,
+                _ => panic!(),
             }
         } else {
-            if self.bank_select.chr_mode() == 0 {
-                match offset / KB_1 {
-                    0 => chr_1kb_bank_0,
-                    1 => chr_1kb_bank_1,
-                    2 => chr_1kb_bank_2,
-                    3 => chr_1kb_bank_3,
-                    _ => panic!(),
-                }
-            } else {
-                if (offset / KB_2) == 0 {
-                    chr_2kb_bank_0
-                } else {
-                    chr_2kb_bank_1
-                }
-            }
+            panic!()
         };
 
         ((base * size) + (addr % size)) % cart.chr_size
