@@ -175,7 +175,7 @@ impl Ppu {
             self.sprite_infos.fill(SpriteInfo::default());
 
             if row < DISPLAY_HEIGHT {
-                self.sprite_eval(row, bus);
+                self.sprite_eval(row);
             }
         }
 
@@ -393,7 +393,7 @@ impl Ppu {
         palette_addr
     }
 
-    fn sprite_eval(&mut self, row: u32, bus: &mut impl PpuBus) {
+    fn sprite_eval(&mut self, row: u32) {
         let mut oam_idx = 0;
         let mut sprites_found = 0;
 
