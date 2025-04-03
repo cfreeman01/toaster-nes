@@ -75,6 +75,8 @@ trait Mapper {
     fn map_chr(&mut self, addr: u16, cart: &mut CartData) -> usize {
         addr as usize
     }
+
+    fn tick(&mut self) {}
 }
 
 pub struct Cartridge {
@@ -170,6 +172,10 @@ impl Cartridge {
 
     pub fn irq(&self) -> bool {
         self.irq
+    }
+
+    pub fn tick(&mut self) {
+        self.mapper.tick();
     }
 }
 

@@ -127,8 +127,9 @@ impl Ppu {
         let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
 
         if row < DISPLAY_HEIGHT || row == NUM_ROWS - 1 {
-            if (col >= 1 && col <= DISPLAY_WIDTH)
-                || (col >= BG_PRE_FETCH_START && col <= BG_PRE_FETCH_END)
+            if ((col >= 1 && col <= DISPLAY_WIDTH)
+                || (col >= BG_PRE_FETCH_START && col <= BG_PRE_FETCH_END))
+                && self.rendering_enabled()
             {
                 if self.bg_enabled() {
                     self.update_shift_regs();
@@ -197,6 +198,10 @@ impl Ppu {
 
         if row < DISPLAY_HEIGHT && (col - 1) < DISPLAY_WIDTH {
             self.draw_pixel(col - 1, row, frame)
+        }
+
+        if !self.rendering_enabled() {
+            bus.ppu_read(self.v.addr());
         }
 
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);

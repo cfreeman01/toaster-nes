@@ -27,6 +27,7 @@ pub struct Mapper4 {
     irq_reset: bool,
     irq_enable: bool,
     a12_prev: bool,
+    irq_delay_counter: u32,
 }
 
 impl Mapper for Mapper4 {
@@ -126,6 +127,10 @@ impl Mapper for Mapper4 {
 
         ((base * size) + (addr % size)) % cart.chr_size
     }
+
+    fn tick(&mut self) {
+        self.irq_delay_counter += 1
+    }
 }
 
 impl Mapper4 {
@@ -145,21 +150,27 @@ impl Mapper4 {
             irq_reset: false,
             irq_enable: false,
             a12_prev: false,
+            irq_delay_counter: 0,
         }
     }
 
     fn update_irq(&mut self, addr: u16, irq: &mut bool) {
         let a12 = addr & 0x1000 == 0x1000;
 
-        if a12 && !self.a12_prev {
+        if !a12 && self.a12_prev {
+            self.irq_delay_counter = 0;
+        } else if a12 && !self.a12_prev && self.irq_delay_counter > 3 {
             if self.irq_reset {
                 self.irq_reset = false;
                 self.irq_counter = self.irq_latch;
             } else {
-                self.irq_counter -= 1;
-                if self.irq_counter == 0 && self.irq_enable {
-                    *irq = true;
+                if self.irq_counter == 0 {
                     self.irq_counter = self.irq_latch;
+                } else {
+                    self.irq_counter -= 1;
+                    if self.irq_counter == 0 && self.irq_enable {
+                        *irq = true;
+                    }
                 }
             }
         }

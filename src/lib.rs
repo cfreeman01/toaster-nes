@@ -123,6 +123,7 @@ impl Nes {
         if self.ppu.cycles() % 3 == 0 {
             if !self.dma_flag {
                 self.cpu.tick(cpu_bus!(self));
+                self.cartridge.tick();
             } else {
                 self.dma_tick();
             }
