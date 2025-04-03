@@ -52,9 +52,7 @@ impl Mapper for Mapper4 {
                     Vertical
                 }
             }
-            (2, 0) => {
-                self.irq_latch = data;
-            },
+            (2, 0) => self.irq_latch = data,
             (2, 1) => self.irq_reset = true,
             (3, 0) => {
                 self.irq_enable = false;
