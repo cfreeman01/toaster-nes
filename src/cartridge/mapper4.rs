@@ -54,7 +54,6 @@ impl Mapper for Mapper4 {
             }
             (2, 0) => {
                 self.irq_latch = data;
-                println!("{}", self.irq_latch);
             },
             (2, 1) => self.irq_reset = true,
             (3, 0) => {
