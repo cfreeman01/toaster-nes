@@ -263,6 +263,7 @@ impl Ppu {
             PPU_ADDR => {
                 if !self.w {
                     self.t.set_addr_hi(field!(data, 0, 6) as u16);
+                    self.t.set_fine_y(self.t.fine_y() & 0x3);
                     self.w = true;
                 } else {
                     self.t.set_addr_low(data as u16);
