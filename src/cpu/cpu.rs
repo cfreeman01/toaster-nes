@@ -374,6 +374,7 @@ impl Cpu {
     fn zp_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
         let addr = bus.cpu_read(self.pc());
         let val = bus.cpu_read(addr as u16);
+        bus.cpu_write(addr as u16, val);
         bus.cpu_write(addr as u16, ins(self, val));
 
         NUM_CYCLES_ZP_RW
@@ -382,6 +383,7 @@ impl Cpu {
     fn zpx_rw(&mut self, bus: &mut impl CpuBus, ins: InsRW) -> u32 {
         let addr = (bus.cpu_read(self.pc()) + self.x) as u16;
         let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, val);
         bus.cpu_write(addr, ins(self, val));
 
         NUM_CYCLES_ZPX_RW
@@ -392,6 +394,7 @@ impl Cpu {
         let addr_high = bus.cpu_read(self.pc());
         let addr = u8_to_u16(addr_low, addr_high);
         let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, val);
         bus.cpu_write(addr, ins(self, val));
 
         NUM_CYCLES_ABS_RW
@@ -402,6 +405,7 @@ impl Cpu {
         let addr_high = bus.cpu_read(self.pc());
         let addr = u8_to_u16(addr_low, addr_high) + (self.x as u16);
         let val = bus.cpu_read(addr);
+        bus.cpu_write(addr, val);
         bus.cpu_write(addr, ins(self, val));
 
         NUM_CYCLES_ABSX_RW

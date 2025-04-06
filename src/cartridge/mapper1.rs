@@ -29,10 +29,15 @@ pub struct Mapper1 {
     chr_bank_0: u8,
     chr_bank_1: u8,
     prg_bank: u8,
+    written_this_cycle: bool,
 }
 
 impl Mapper for Mapper1 {
     fn write_reg(&mut self, addr: u16, data: u8, cart: &mut CartData) {
+        if self.written_this_cycle {
+            return;
+        }
+
         if (data & MSB == MSB) {
             self.shift_reg = 0;
             self.write_count = 0;
@@ -63,6 +68,8 @@ impl Mapper for Mapper1 {
                 self.write_count = 0;
             }
         }
+
+        self.written_this_cycle = true;
     }
 
     fn map_prg(&mut self, addr: u16, cart: &mut CartData) -> usize {
@@ -104,6 +111,10 @@ impl Mapper for Mapper1 {
             }
         }) % cart.chr_size
     }
+
+    fn tick(&mut self) {
+        self.written_this_cycle = false;
+    }
 }
 
 impl Mapper1 {
@@ -115,6 +126,7 @@ impl Mapper1 {
             chr_bank_0: 0,
             chr_bank_1: 0,
             prg_bank: 0,
+            written_this_cycle: false,
         }
     }
 }
