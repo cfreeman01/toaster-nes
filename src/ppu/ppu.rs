@@ -68,8 +68,8 @@ pub struct Ppu {
     read_buf: u8,
     palette_ram: [u8; PALETTE_RAM_SIZE],
     nmi: bool,
-    bg_shift_reg_0: u16,
-    bg_shift_reg_1: u16,
+    bg_patt_shift_reg_0: u16,
+    bg_patt_shift_reg_1: u16,
     bg_attr_shift_reg_0: u16,
     bg_attr_shift_reg_1: u16,
     bg_tile_num: u8,
@@ -98,8 +98,8 @@ impl Default for Ppu {
             read_buf: Default::default(),
             palette_ram: Default::default(),
             nmi: Default::default(),
-            bg_shift_reg_0: Default::default(),
-            bg_shift_reg_1: Default::default(),
+            bg_patt_shift_reg_0: Default::default(),
+            bg_patt_shift_reg_1: Default::default(),
             bg_attr_shift_reg_0: Default::default(),
             bg_attr_shift_reg_1: Default::default(),
             bg_tile_num: Default::default(),
@@ -323,15 +323,15 @@ impl Ppu {
     }
 
     fn update_shift_regs(&mut self) {
-        self.bg_shift_reg_0 <<= 1;
-        self.bg_shift_reg_1 <<= 1;
-        self.bg_attr_shift_reg_0 <<= 1;
-        self.bg_attr_shift_reg_1 <<= 1;
+        self.bg_patt_shift_reg_0 = (self.bg_patt_shift_reg_0 << 1) | 0x01;
+        self.bg_patt_shift_reg_1 = (self.bg_patt_shift_reg_1 << 1) | 0x01;
+        self.bg_attr_shift_reg_0 = (self.bg_attr_shift_reg_0 << 1) | 0x01;
+        self.bg_attr_shift_reg_1 = (self.bg_attr_shift_reg_1 << 1) | 0x01;
     }
 
     fn load_shift_regs(&mut self) {
-        load_shift_reg(&mut self.bg_shift_reg_0, self.bg_pattern_0);
-        load_shift_reg(&mut self.bg_shift_reg_1, self.bg_pattern_1);
+        load_shift_reg(&mut self.bg_patt_shift_reg_0, self.bg_pattern_0);
+        load_shift_reg(&mut self.bg_patt_shift_reg_1, self.bg_pattern_1);
         load_shift_reg(
             &mut self.bg_attr_shift_reg_0,
             if field!(self.bg_attr, 0, 1) == 1 {
@@ -391,8 +391,8 @@ impl Ppu {
 
     fn get_bg_pixel_info(&mut self) -> PaletteAddr {
         let mut palette_addr = PaletteAddr::default();
-        palette_addr.set_p0(self.fine_x(self.bg_shift_reg_0));
-        palette_addr.set_p1(self.fine_x(self.bg_shift_reg_1));
+        palette_addr.set_p0(self.fine_x(self.bg_patt_shift_reg_0));
+        palette_addr.set_p1(self.fine_x(self.bg_patt_shift_reg_1));
         palette_addr.set_a0(self.fine_x(self.bg_attr_shift_reg_0));
         palette_addr.set_a1(self.fine_x(self.bg_attr_shift_reg_1));
 
