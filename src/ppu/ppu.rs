@@ -501,7 +501,7 @@ impl Ppu {
     }
 
     fn draw_pixel(&mut self, x: u32, y: u32, frame: &mut [u8; FRAME_SIZE_BYTES]) {
-        let frame_idx = ((y * DISPLAY_WIDTH + x) * 3) as usize;
+        let frame_idx = (((y * DISPLAY_WIDTH) + x) * 3) as usize;
         let bg_addr = self.get_bg_pixel_info();
         let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
         let transparent_pixel = self.get_color(PaletteAddr { data: 0 });
