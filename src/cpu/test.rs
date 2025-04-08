@@ -965,19 +965,19 @@ fn irq() {
     bus.cpu_write_16(VEC_IRQ, 0x1111);
     bus.cpu_write_vec(0x1111, isr_bin);
 
+    cpu.irq = true;
     cpu.step(&mut bus);
     assert_eq!(cpu.i, false);
-    cpu.irq = true;
     cpu.step(&mut bus);
     assert_eq!(cpu.i, true);
     assert_eq!(cpu.pc, 0x1111);
     cpu.step(&mut bus);
     assert_eq!(cpu.d, true);
+    cpu.irq = false;
     cpu.step(&mut bus);
     assert_eq!(cpu.d, false);
     assert_eq!(cpu.i, false);
     assert_eq!(cpu.pc, 0x8001);
-    cpu.irq = false;
     cpu.step(&mut bus);
     assert_eq!(cpu.a, 0xAA);
 }
@@ -1000,9 +1000,9 @@ fn nmi() {
     bus.cpu_write_16(VEC_NMI, 0x1111);
     bus.cpu_write_vec(0x1111, isr_bin);
 
+    cpu.nmi = true;
     cpu.step(&mut bus);
     assert_eq!(cpu.i, true);
-    cpu.nmi = true;
     cpu.step(&mut bus);
     assert_eq!(cpu.i, true);
     assert_eq!(cpu.pc, 0x1111);
@@ -1012,10 +1012,9 @@ fn nmi() {
     assert_eq!(cpu.d, false);
     assert_eq!(cpu.i, true);
     assert_eq!(cpu.pc, 0x8001);
+    cpu.nmi = false;
     cpu.step(&mut bus);
     assert_eq!(cpu.a, 0xAA);
-    assert_eq!(cpu.nmi, true);
-    cpu.nmi = false;
     cpu.step(&mut bus);
     assert_eq!(cpu.a, 0xFF);
 }
