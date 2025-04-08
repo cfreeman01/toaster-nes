@@ -1,7 +1,7 @@
 # ToasterNES
 Simple NES emulator written in Rust.
 
-![nes-emu](https://github.com/user-attachments/assets/8ef08163-2636-45e5-86cf-e46cd5d384a6)
+![image](https://github.com/user-attachments/assets/bbcf7fe4-d066-493f-aa9d-585cbd726f17)
 
 ## Building & Running
 - The Rust toolchain is required: https://www.rust-lang.org/tools/install
@@ -30,6 +30,7 @@ Currently supported mappers:
 | 1 | _The Legend of Zelda_, _Tetris_, _Metroid_, _Dr. Mario_, _Ninja Gaiden_|
 | 2 | _DuckTales_, _Mega Man_, _Castlevania_, _Metal Gear_ |
 | 3 | _Gradius_, _Paperboy_, _Track & Field_ |
+| 4 | _Super Mario Bros. 2_, _Super Mario Bros. 3_, _Kirby's Adventure_ |
 
 ## To-do List
 - Add audio
