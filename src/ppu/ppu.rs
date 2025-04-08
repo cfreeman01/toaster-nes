@@ -11,9 +11,9 @@ use crate::{DISPLAY_HEIGHT, DISPLAY_WIDTH, FRAME_SIZE_BYTES, PPU_REG_END, PPU_RE
 use ppu_palette::*;
 use ppu_regs::*;
 
-pub const ROW_SIZE: u32 = 341;
 pub const NUM_ROWS: u32 = 262;
-pub const CYCLES_PER_FRAME: u32 = ROW_SIZE * NUM_ROWS;
+pub const NUM_COLS: u32 = 341;
+pub const CYCLES_PER_FRAME: u32 = NUM_COLS * NUM_ROWS;
 const PPU_CTRL: u16 = 0;
 const PPU_MASK: u16 = 1;
 const PPU_STATUS: u16 = 2;
@@ -82,7 +82,8 @@ pub struct Ppu {
     sprite_patterns_1: [u8; SPRITES_PER_ROW],
     oam_addr: u8,
     cycles: u32,
-    frame_cycle: u32,
+    row: u32,
+    col: u32,
 }
 
 impl Default for Ppu {
@@ -112,7 +113,8 @@ impl Default for Ppu {
             sprite_patterns_1: [0; SPRITES_PER_ROW],
             oam_addr: Default::default(),
             cycles: Default::default(),
-            frame_cycle: Default::default(),
+            row: 0,
+            col: 0,
         }
     }
 }
@@ -124,18 +126,11 @@ pub trait PpuBus {
 
 impl Ppu {
     pub fn tick(&mut self, bus: &mut impl PpuBus, frame: &mut [u8; FRAME_SIZE_BYTES]) {
-        let (row, col) = (self.frame_cycle / ROW_SIZE, self.frame_cycle % ROW_SIZE);
+        if (self.is_visible_row() || self.is_prerender_row()) && self.rendering_enabled() {
+            if self.is_visible_col() || self.is_bg_prefetch_col() {
+                self.update_shift_regs();
 
-        if row < DISPLAY_HEIGHT || row == NUM_ROWS - 1 {
-            if ((col >= 1 && col <= DISPLAY_WIDTH)
-                || (col >= BG_PRE_FETCH_START && col <= BG_PRE_FETCH_END))
-                && self.rendering_enabled()
-            {
-                if self.bg_enabled() {
-                    self.update_shift_regs();
-                }
-
-                match (col - 1) % 8 {
+                match (self.col - 1) % 8 {
                     0 => {
                         self.load_shift_regs();
                         self.fetch_bg_tile_num(bus);
@@ -143,28 +138,24 @@ impl Ppu {
                     2 => self.fetch_bg_attr(bus),
                     4 => self.fetch_bg_pattern(bus, 0),
                     6 => self.fetch_bg_pattern(bus, 1),
-                    7 => {
-                        if self.bg_enabled() {
-                            self.inc_v_hor()
-                        }
-                    }
+                    7 => self.inc_v_hor(),
                     _ => (),
                 };
             };
 
-            if col == DISPLAY_WIDTH && self.rendering_enabled() {
+            if self.col == DISPLAY_WIDTH {
                 self.inc_v_ver();
             }
 
-            if col == DISPLAY_WIDTH + 1 && self.rendering_enabled() {
+            if self.col == DISPLAY_WIDTH + 1 {
                 self.load_shift_regs();
                 self.v.set_coarse_x(self.t.coarse_x());
                 self.v.set_nx(self.t.nx());
             }
 
-            if col >= SPRITE_FETCH_START && col <= SPRITE_FETCH_END && self.rendering_enabled() {
-                let sprite_idx = ((col - SPRITE_FETCH_START) / 8) as usize;
-                match (col - SPRITE_FETCH_START) % 8 {
+            if self.is_sprite_fetch_col() {
+                let sprite_idx = ((self.col - SPRITE_FETCH_START) / 8) as usize;
+                match (self.col - SPRITE_FETCH_START) % 8 {
                     4 => self.fetch_sprite_pattern(bus, 0, sprite_idx),
                     6 => self.fetch_sprite_pattern(bus, 1, sprite_idx),
                     _ => (),
@@ -172,40 +163,39 @@ impl Ppu {
             }
         }
 
-        if col == DISPLAY_WIDTH + 1 {
+        if self.col == DISPLAY_WIDTH + 1 {
             self.sprite_infos.fill(SpriteInfo::default());
 
-            if row < DISPLAY_HEIGHT {
-                self.sprite_eval(row);
+            if self.row < DISPLAY_HEIGHT {
+                self.sprite_eval();
             }
         }
 
-        if row == DISPLAY_HEIGHT + 1 && col == 1 {
+        if self.row == DISPLAY_HEIGHT + 1 && self.col == 1 {
             self.status.set_v(1)
         }
 
-        if row == NUM_ROWS - 1 && col == 1 {
+        if self.row == NUM_ROWS - 1 && self.col == 1 {
             self.status.set_v(0);
             self.status.set_s(0);
             self.status.set_o(0);
         }
 
-        if row == NUM_ROWS - 1 && self.rendering_enabled() {
+        if self.row == NUM_ROWS - 1 && self.rendering_enabled() {
             self.v.set_coarse_y(self.t.coarse_y());
             self.v.set_fine_y(self.t.fine_y());
             self.v.set_ny(self.t.ny());
         }
 
-        if row < DISPLAY_HEIGHT && (col - 1) < DISPLAY_WIDTH {
-            self.draw_pixel(col - 1, row, frame)
+        if self.is_visible_row() && self.is_visible_col() {
+            self.draw_pixel(frame)
         }
 
-        if !self.rendering_enabled() {
-            bus.ppu_read(self.v.addr());
+        self.col = (self.col + 1) % NUM_COLS;
+        if self.col == 0 {
+            self.row = (self.row + 1) % NUM_ROWS;
         }
-
         self.nmi = ((self.status.v() & self.ctrl.v()) == 1);
-        self.frame_cycle = (self.frame_cycle + 1) % CYCLES_PER_FRAME;
         self.cycles += 1;
     }
 
@@ -399,14 +389,14 @@ impl Ppu {
         palette_addr
     }
 
-    fn sprite_eval(&mut self, row: u32) {
+    fn sprite_eval(&mut self) {
         let mut oam_idx = 0;
         let mut sprites_found = 0;
 
         while oam_idx < OAM_SIZE {
             let y = self.oam[oam_idx];
 
-            let mut fine_y = row - (y as u32);
+            let mut fine_y = self.row - (y as u32);
             let y_max = if self.sprites_8x16() { 15 } else { 7 };
 
             if (0..=y_max).contains(&fine_y) {
@@ -472,10 +462,10 @@ impl Ppu {
         }
     }
 
-    fn get_sprite_pixel_info(&mut self, x: u32) -> (SpriteInfo, PaletteAddr) {
+    fn get_sprite_pixel_info(&mut self) -> (SpriteInfo, PaletteAddr) {
         for idx in 0..SPRITES_PER_ROW {
             let sprite = self.sprite_infos[idx];
-            let mut fine_x = x - sprite.x_pos as u32;
+            let mut fine_x = (self.col - 1) - sprite.x_pos as u32;
             if sprite.attr.flip_hor() == 1 {
                 fine_x = 7 - fine_x;
             }
@@ -500,10 +490,11 @@ impl Ppu {
         (SpriteInfo::default(), PaletteAddr { data: 0 })
     }
 
-    fn draw_pixel(&mut self, x: u32, y: u32, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+    fn draw_pixel(&mut self, frame: &mut [u8; FRAME_SIZE_BYTES]) {
+        let (x, y) = (self.col - 1, self.row);
         let frame_idx = (((y * DISPLAY_WIDTH) + x) * 3) as usize;
         let bg_addr = self.get_bg_pixel_info();
-        let (sprite_info, sprite_addr) = self.get_sprite_pixel_info(x);
+        let (sprite_info, sprite_addr) = self.get_sprite_pixel_info();
         let transparent_pixel = self.get_color(PaletteAddr { data: 0 });
         let mut bg_pixel = self.get_color(bg_addr);
         let mut sprite_pixel = self.get_color(sprite_addr);
@@ -562,6 +553,26 @@ impl Ppu {
 
     fn sprites_8x16(&self) -> bool {
         self.ctrl.h() == 1
+    }
+
+    fn is_visible_row(&self) -> bool {
+        self.row < DISPLAY_HEIGHT
+    }
+
+    fn is_prerender_row(&self) -> bool {
+        self.row == NUM_ROWS - 1
+    }
+
+    fn is_visible_col(&self) -> bool {
+        self.col >= 1 && self.col <= DISPLAY_WIDTH
+    }
+
+    fn is_bg_prefetch_col(&self) -> bool {
+        self.col >= BG_PRE_FETCH_START && self.col <= BG_PRE_FETCH_END
+    }
+
+    fn is_sprite_fetch_col(&self) -> bool {
+        self.col >= SPRITE_FETCH_START && self.col <= SPRITE_FETCH_END
     }
 }
 
