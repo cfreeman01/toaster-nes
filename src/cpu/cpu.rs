@@ -17,7 +17,11 @@ pub struct Cpu {
     pub reset: bool,
     pub irq: bool,
     pub nmi: bool,
-    prev_nmi: bool,
+    nmi_prev: bool,
+    irq_level_detected: bool,
+    nmi_edge_detected: bool,
+    irq_rdy: bool,
+    nmi_latch: bool,
     cycles: u32,
     ins_cycles: u32,
 }
@@ -70,18 +74,24 @@ impl Cpu {
         if self.ins_cycles == 0 {
             self.ins_cycles = if self.reset {
                 self.int(bus, VEC_RESET, false)
-            } else if self.nmi && !self.prev_nmi {
+            } else if self.nmi_latch {
+                self.nmi_latch = false;
                 self.int(bus, VEC_NMI, false)
-            } else if self.irq && !self.i {
+            } else if self.irq_rdy && !self.i {
                 self.int(bus, VEC_IRQ, false)
             } else {
                 let opcode = bus.cpu_read(self.pc());
                 self.exec(bus, opcode)
-            };
-
-            self.prev_nmi = self.nmi;
+            }
         }
 
+        if self.nmi_edge_detected {
+            self.nmi_latch = true;
+        }
+        self.irq_rdy = self.irq_level_detected;
+        self.nmi_edge_detected = self.nmi && !self.nmi_prev;
+        self.irq_level_detected = self.irq;
+        self.nmi_prev = self.nmi;
         self.cycles += 1;
         self.ins_cycles -= 1;
     }
